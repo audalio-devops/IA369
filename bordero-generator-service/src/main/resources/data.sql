@@ -1,0 +1,58 @@
+-- Limpar tarifas existentes
+DELETE FROM tarifas;
+
+-- Tarifas por documento
+INSERT INTO tarifas (tipo, codigo, nome, descricao, valor, ativa, data_criacao, data_atualizacao) VALUES
+('DOCUMENTO', 'TAR_DOC', 'Tarifa por Título', 'Tarifa cobrada por cada título do borderô', 2.50, true, NOW(), NOW());
+
+-- Tarifas por cliente
+INSERT INTO tarifas (tipo, codigo, nome, descricao, valor, ativa, data_criacao, data_atualizacao) VALUES
+('CLIENTE', 'SERASA', 'Consulta Serasa', 'Consulta de crédito no Serasa', 10.00, true, NOW(), NOW());
+
+-- Tarifas gerais
+INSERT INTO tarifas (tipo, codigo, nome, descricao, valor, ativa, data_criacao, data_atualizacao) VALUES
+('GERAL', 'TAC', 'TAC - Tarifa de Abertura de Crédito', 'Taxa cobrada na abertura do crédito', 100.00, true, NOW(), NOW()),
+('GERAL', 'TED', 'TED - Transferência Eletrônica', 'Taxa de transferência bancária', 50.00, true, NOW(), NOW());
+
+-- Limpar feriados existentes
+DELETE FROM feriados;
+
+-- Feriados Nacionais 2025
+INSERT INTO feriados (data, nome, tipo, descricao, ativo) VALUES
+('2025-01-01', 'Confraternização Universal', 'NACIONAL', 'Ano Novo', true),
+('2025-03-04', 'Carnaval', 'NACIONAL', 'Carnaval', true),
+('2025-04-18', 'Sexta-feira Santa', 'NACIONAL', 'Paixão de Cristo', true),
+('2025-04-21', 'Tiradentes', 'NACIONAL', 'Tiradentes', true),
+('2025-05-01', 'Dia do Trabalho', 'NACIONAL', 'Dia do Trabalhador', true),
+('2025-06-19', 'Corpus Christi', 'NACIONAL', 'Corpus Christi', true),
+('2025-09-07', 'Independência do Brasil', 'NACIONAL', 'Sete de Setembro', true),
+('2025-10-12', 'Nossa Senhora Aparecida', 'NACIONAL', 'Padroeira do Brasil', true),
+('2025-11-02', 'Finados', 'NACIONAL', 'Dia de Finados', true),
+('2025-11-15', 'Proclamação da República', 'NACIONAL', 'República', true),
+('2025-11-20', 'Consciência Negra', 'NACIONAL', 'Consciência Negra', true),
+('2025-12-25', 'Natal', 'NACIONAL', 'Natal', true);
+
+-- Feriados Nacionais 2026
+INSERT INTO feriados (data, nome, tipo, descricao, ativo) VALUES
+('2026-01-01', 'Confraternização Universal', 'NACIONAL', 'Ano Novo', true),
+('2026-02-17', 'Carnaval', 'NACIONAL', 'Carnaval', true),
+('2026-04-03', 'Sexta-feira Santa', 'NACIONAL', 'Paixão de Cristo', true),
+('2026-04-21', 'Tiradentes', 'NACIONAL', 'Tiradentes', true),
+('2026-05-01', 'Dia do Trabalho', 'NACIONAL', 'Dia do Trabalhador', true),
+('2026-06-04', 'Corpus Christi', 'NACIONAL', 'Corpus Christi', true),
+('2026-09-07', 'Independência do Brasil', 'NACIONAL', 'Sete de Setembro', true),
+('2026-10-12', 'Nossa Senhora Aparecida', 'NACIONAL', 'Padroeira do Brasil', true),
+('2026-11-02', 'Finados', 'NACIONAL', 'Dia de Finados', true),
+('2026-11-15', 'Proclamação da República', 'NACIONAL', 'República', true),
+('2026-11-20', 'Consciência Negra', 'NACIONAL', 'Consciência Negra', true),
+('2026-12-25', 'Natal', 'NACIONAL', 'Natal', true);
+
+-- Feriados Estaduais SP
+INSERT INTO feriados (data, nome, tipo, descricao, uf, ativo) VALUES
+('2025-07-09', 'Revolução Constitucionalista', 'ESTADUAL', 'Revolução de 1932', 'SP', true),
+('2026-07-09', 'Revolução Constitucionalista', 'ESTADUAL', 'Revolução de 1932', 'SP', true);
+
+-- Feriados Municipais São Paulo
+INSERT INTO feriados (data, nome, tipo, descricao, uf, codigo_municipio, ativo) VALUES
+('2025-01-25', 'Aniversário de São Paulo', 'MUNICIPAL', 'Aniversário da Cidade', 'SP', '3550308', true),
+('2026-01-25', 'Aniversário de São Paulo', 'MUNICIPAL', 'Aniversário da Cidade', 'SP', '3550308', true);
