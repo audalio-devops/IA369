@@ -12,7 +12,6 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.List;
 
 import com.lowagie.text.*;
 import com.lowagie.text.pdf.*;
@@ -20,8 +19,8 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
-import com.bordero.bordero.domain.model.*;
 import java.time.LocalDate;
+import java.util.List;
 
 
 @Service
@@ -51,7 +50,7 @@ public class BorderoGeneratorService {
         log.info("Gerando borderô para NF-e ID: {}", nfeId);
 
         // Buscar dados da NF-e via Feign Client
-        var nfeData = nfeClientService.buscarNFe(nfeId);
+        Map<String, Object> nfeData = nfeClientService.buscarNFe(nfeId);
 
         Bordero bordero = Bordero.builder()
                 .dataGeracao(LocalDateTime.now())
@@ -67,6 +66,13 @@ public class BorderoGeneratorService {
         List<Map<String, Object>> duplicatas =
                 (List<Map<String, Object>>) nfeData.get("duplicatas");
 
+        if (duplicatas == null || duplicatas.isEmpty()) {
+            throw new IllegalArgumentException("NFe não possui duplicatas para gerar borderô");
+        }
+
+        // Controle de duplicatas já processadas
+        Set<String> numerosProcessados = new LinkedHashSet<>();
+
         BigDecimal valorTotalBruto = BigDecimal.ZERO;
         BigDecimal valorTotalDesagio = BigDecimal.ZERO;
         BigDecimal valorTotalLiquido = BigDecimal.ZERO;
@@ -78,9 +84,27 @@ public class BorderoGeneratorService {
         LocalDate dataHoje = LocalDate.now();
 
         for (Map<String, Object> dup : duplicatas) {
+            String numeroDuplicata = dup.get("numero").toString();
+
+            // ========== CORREÇÃO 1: Evitar duplicatas ==========
+            if (numerosProcessados.contains(numeroDuplicata)) {
+                log.warn("Duplicata {} já foi processada, ignorando", numeroDuplicata);
+                continue;
+            }
+            numerosProcessados.add(numeroDuplicata);
+
             String vencimentoStr = dup.get("vencimento").toString();
             LocalDateTime vencimento = LocalDateTime.parse(vencimentoStr);
-            BigDecimal valor = new BigDecimal(dup.get("valor").toString());
+
+            // ========== CORREÇÃO 2: Garantir valor sempre positivo ==========
+            BigDecimal valorOriginal = new BigDecimal(dup.get("valor").toString());
+            BigDecimal valor = valorOriginal.abs(); // Sempre positivo
+
+            if (valorOriginal.compareTo(BigDecimal.ZERO) < 0) {
+                log.warn("Valor negativo detectado na duplicata {}: {} - convertido para positivo",
+                        numeroDuplicata, valorOriginal);
+            }
+
             Long duplicataId = Long.valueOf(dup.get("id") != null ? dup.get("id").toString() : "0");
 
             // Calcular float (D+) considerando fins de semana e feriados
@@ -92,6 +116,12 @@ public class BorderoGeneratorService {
             // Dias corridos até a data de compensação
             int diasCorridos = (int) ChronoUnit.DAYS.between(dataHoje, dataCompensacao);
 
+            // Garantir que dias corridos não seja negativo
+            if (diasCorridos < 0) {
+                diasCorridos = 0;
+                log.warn("Duplicata {} já vencida. Dias corridos ajustado para 0", numeroDuplicata);
+            }
+
             // Dias úteis (para informação)
             int diasUteis = diaUtilService.calcularDiasUteis(dataHoje, dataCompensacao, "SP", null);
 
@@ -100,29 +130,42 @@ public class BorderoGeneratorService {
             BigDecimal taxaMensal = new BigDecimal("1.50"); // 1.5% a.m.
             BigDecimal taxaDiaria = taxaMensal.divide(new BigDecimal("30"), 6, RoundingMode.HALF_UP);
 
-            // Deságio = Valor * Taxa Diária * Dias Corridos
+            // Deságio = Valor * Taxa Diária * Dias Corridos / 100
             BigDecimal desagio = valor
                     .multiply(taxaDiaria)
                     .multiply(new BigDecimal(diasCorridos))
                     .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
 
+            // ========== CORREÇÃO 3: Garantir deságio não negativo ==========
+            if (desagio.compareTo(BigDecimal.ZERO) < 0) {
+                desagio = BigDecimal.ZERO;
+                log.warn("Deságio negativo detectado, ajustado para zero");
+            }
+
             // Valor líquido = Valor bruto - Deságio
             BigDecimal valorLiquido = valor.subtract(desagio);
+
+            // ========== CORREÇÃO 4: Garantir valor líquido não negativo ==========
+            if (valorLiquido.compareTo(BigDecimal.ZERO) < 0) {
+                log.error("Valor líquido negativo detectado! Valor: {}, Deságio: {}",
+                        valor, desagio);
+                valorLiquido = BigDecimal.ZERO;
+            }
 
             TituloBordero titulo = TituloBordero.builder()
                     .nfeId(nfeId)
                     .duplicataId(duplicataId)
                     .chaveAcessoNFe(nfeData.get("chaveAcesso").toString())
                     .numeroNFe(nfeData.get("numeroNfe").toString())
-                    .numeroDuplicata(dup.get("numero").toString())
+                    .numeroDuplicata(numeroDuplicata)
                     .dataVencimento(vencimento)
-                    .valorBruto(valor)
-                    .diasParaVencimento(diasCorridos) // Dias corridos até compensação
-                    .diasUteis(diasUteis)  // Novo campo
-                    .dataCompensacao(dataCompensacao) // Novo campo
+                    .valorBruto(valor) // Sempre positivo
+                    .diasParaVencimento(diasCorridos)
+                    .diasUteis(diasUteis)
+                    .dataCompensacao(dataCompensacao)
                     .taxaDesagio(taxaMensal)
-                    .valorDesagio(desagio)
-                    .valorLiquido(valorLiquido)
+                    .valorDesagio(desagio) // Sempre positivo ou zero
+                    .valorLiquido(valorLiquido) // Sempre positivo ou zero
                     .cnpjSacado(extrairDadoDeLista(nfeData,"destinatario", "cnpj"))
                     .nomeSacado(extrairDadoDeLista(nfeData,"destinatario", "razaoSocial"))
                     .build();
@@ -141,22 +184,40 @@ public class BorderoGeneratorService {
             if (maiorVenc == null || vencimento.isAfter(maiorVenc)) {
                 maiorVenc = vencimento;
             }
+
+            log.debug("Título processado: {} - Valor Bruto: {} - Deságio: {} - Líquido: {}",
+                    numeroDuplicata, valor, desagio, valorLiquido);
+        }
+
+        int quantidadeTitulosProcessados = bordero.getTitulos().size();
+
+        if (quantidadeTitulosProcessados == 0) {
+            throw new IllegalStateException("Nenhum título foi processado para o borderô");
         }
 
         // Calcular tarifas
         CalculoTarifasResult tarifas = tarifaService.calcularTarifas(
-                duplicatas.size(),
+                quantidadeTitulosProcessados,
                 true // Incluir consulta Serasa
         );
 
         // Aplicar tarifas por documento (subtrair do líquido de cada título)
         BigDecimal tarifaPorTitulo = tarifas.getTarifasPorDocumento()
-                .divide(new BigDecimal(duplicatas.size()), 2, RoundingMode.HALF_UP);
+                .divide(new BigDecimal(quantidadeTitulosProcessados), 2, RoundingMode.HALF_UP);
 
         for (TituloBordero titulo : bordero.getTitulos()) {
-            BigDecimal liquido = titulo.getValorLiquido().subtract(tarifaPorTitulo);
-            titulo.setValorLiquido(liquido);
-            titulo.setTarifaDocumento(tarifaPorTitulo); // Novo campo
+            BigDecimal liquidoAtual = titulo.getValorLiquido();
+            BigDecimal novoLiquido = liquidoAtual.subtract(tarifaPorTitulo);
+
+            // Garantir que não fique negativo após tarifa
+            if (novoLiquido.compareTo(BigDecimal.ZERO) < 0) {
+                log.warn("Valor líquido do título {} ficaria negativo após tarifa. Ajustando para zero",
+                        titulo.getNumeroDuplicata());
+                novoLiquido = BigDecimal.ZERO;
+            }
+
+            titulo.setValorLiquido(novoLiquido);
+            titulo.setTarifaDocumento(tarifaPorTitulo);
         }
 
         // Recalcular líquido total após tarifas por documento
@@ -167,24 +228,32 @@ public class BorderoGeneratorService {
                 .subtract(tarifas.getTarifasPorCliente())
                 .subtract(tarifas.getTarifasGerais());
 
+        // Garantir que valor final não seja negativo
+        if (valorFinal.compareTo(BigDecimal.ZERO) < 0) {
+            log.error("Valor final do borderô ficaria negativo! Ajustando para zero. " +
+                    "Verifique as tarifas configuradas.");
+            valorFinal = BigDecimal.ZERO;
+        }
+
         // Preencher borderô
         bordero.setValorBruto(valorTotalBruto);
         bordero.setValorDesagio(valorTotalDesagio);
         bordero.setValorTarifas(tarifas.getValorTotal());
-        bordero.setTarifasDetalhamento(tarifas.getDetalhamento().toString()); // Novo campo
+        bordero.setTarifasDetalhamento(tarifas.getDetalhamento().toString());
         bordero.setValorLiquido(valorFinal);
 
-        bordero.setQuantidadeTitulos(duplicatas.size());
-        bordero.setPrazoMedio(somaDiasCorridos / duplicatas.size());
-        bordero.setPrazoMedioDiasUteis(somaDiasUteis / duplicatas.size()); // Novo campo
+        bordero.setQuantidadeTitulos(quantidadeTitulosProcessados);
+        bordero.setPrazoMedio(somaDiasCorridos / quantidadeTitulosProcessados);
+        bordero.setPrazoMedioDiasUteis(somaDiasUteis / quantidadeTitulosProcessados);
         bordero.setVencimentoMenor(menorVenc);
         bordero.setVencimentoMaior(maiorVenc);
 
         Bordero borderoSalvo = repository.save(bordero);
 
-        log.info("Borderô gerado: {} com {} títulos - Líquido: R$ {}",
+        log.info("Borderô gerado com sucesso: {} | Títulos: {} | Valor Bruto: R$ {} | Valor Líquido: R$ {}",
                 borderoSalvo.getNumeroBordero(),
                 borderoSalvo.getQuantidadeTitulos(),
+                borderoSalvo.getValorBruto(),
                 borderoSalvo.getValorLiquido());
 
         return borderoSalvo;
@@ -343,21 +412,21 @@ public class BorderoGeneratorService {
     }
 
     /**
-     * Lógica comum para navegar no mapa "emitente" e buscar uma chave específica.
+     * Lógica comum para navegar no mapa "destinatario" e buscar uma chave específica.
      */
     @SuppressWarnings("unchecked")
     private String extrairDadoDeLista(Map<String, Object> nfeData, String nomeLista, String chaveBusca) {
         if (nfeData == null) return null;
 
-        // 1. Obtém o objeto 'emitente'
-        Object emitenteObj = nfeData.get(nomeLista);
+        // 1. Obtém o objeto da lista (ex: 'destinatario')
+        Object listaObj = nfeData.get(nomeLista);
 
         // 2. Verifica se ele é realmente um Mapa antes de tentar acessar
-        if (emitenteObj instanceof Map) {
-            Map<String, Object> emitenteMap = (Map<String, Object>) emitenteObj;
+        if (listaObj instanceof Map) {
+            Map<String, Object> listaMap = (Map<String, Object>) listaObj;
 
             // 3. Busca o valor (cnpj ou razaoSocial)
-            Object valor = emitenteMap.get(chaveBusca);
+            Object valor = listaMap.get(chaveBusca);
 
             // 4. Retorna como String ou null se não existir
             return valor != null ? valor.toString() : null;
