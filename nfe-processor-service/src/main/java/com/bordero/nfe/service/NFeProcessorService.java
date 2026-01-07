@@ -1,14 +1,18 @@
 package com.bordero.nfe.service;
 
+import com.bordero.nfe.client.ClientServiceClient;
+import com.bordero.nfe.client.dto.ClientDTO;
 import com.bordero.nfe.domain.dto.*;
 import com.bordero.nfe.domain.model.*;
 import com.bordero.nfe.repository.NotaFiscalRepository;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
+
 
 @Service
 @Slf4j
@@ -18,6 +22,7 @@ public class NFeProcessorService {
     private final XmlParserService xmlParserService;
     private final NotaFiscalRepository repository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ClientServiceClient clientServiceClient;
 
     @Transactional
     public ProcessamentoResponse processarNFe(UploadNFeRequest request) {
@@ -159,4 +164,37 @@ public class NFeProcessorService {
                 .status(nfe.getStatus().name())
                 .build();
     }
+
+    private void validarCliente(String cnpj, List<String> erros) {
+        try {
+            ClientDTO client = clientServiceClient.buscarPorCnpj(cnpj);
+
+            if (client == null) {
+                erros.add("Cliente não encontrado no sistema");
+                return;
+            }
+
+            if (!"APROVADO".equals(client.getStatus())) {
+                erros.add("Cliente não está aprovado para operações. Status: " + client.getStatus());
+            }
+
+            if (client.getLimiteDisponivel() == null ||
+                    client.getLimiteDisponivel().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                erros.add("Cliente não possui limite de crédito disponível");
+            }
+
+            log.info("Cliente validado: {} - {} - Limite disponível: {}",
+                    cnpj, client.getRazaoSocial(), client.getLimiteDisponivel());
+
+        } catch (FeignException.NotFound e) {
+            erros.add("Cliente não cadastrado no sistema. CNPJ: " + cnpj);
+            log.warn("Cliente não encontrado: {}", cnpj);
+        } catch (FeignException e) {
+            erros.add("Erro ao validar cliente: " + e.getMessage());
+            log.error("Erro ao consultar client-service", e);
+        }
+    }
+
+
+
 }

@@ -5,12 +5,10 @@ spring:
   application:
     name: client-service
 
-  # Spring Security temporariamente desabilitado
   security:
     enabled: false
 
   datasource:
-    # URL para conectar do Windows ao PostgreSQL no WSL2
     url: jdbc:postgresql://localhost:5432/client_db
     username: postgres
     password: postgres
@@ -28,18 +26,30 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-# Desabilitar Eureka para desenvolvimento local
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
 eureka:
   client:
-    enabled: false
-    register-with-eureka: false
-    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 10
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
@@ -49,3 +59,8 @@ logging:
     com.bordero.client: DEBUG
     org.springframework: INFO
     org.hibernate.SQL: DEBUG
+
+# JWT pode ficar, mas não será usado
+jwt:
+  secret: seu-segredo-super-secreto-de-256-bits-minimo-para-seguranca
+  expiration: 86400000

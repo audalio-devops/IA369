@@ -54,4 +54,14 @@ public class ClientController {
         service.atualizarLimiteCredito(id, limite);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/cnpj/{cnpj}/descontar")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    public ResponseEntity<Void> descontarLimite(
+            @PathVariable String cnpj,
+            @RequestParam BigDecimal valor) {
+
+        service.descontarLimite(cnpj, valor);
+        return ResponseEntity.noContent().build();
+    }
 }
