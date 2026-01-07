@@ -1,15 +1,15 @@
 server:
-  port: 8084
+  port: 8081
 
 spring:
   application:
-    name: client-service
+    name: nfe-processor-service
 
   security:
     enabled: false
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/client_db
+    url: jdbc:postgresql://localhost:5432/nfe_db
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -26,10 +26,11 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-  servlet:
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 eureka:
   client:
@@ -45,6 +46,16 @@ eureka:
     lease-renewal-interval-in-seconds: 5
     lease-expiration-duration-in-seconds: 10
 
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+      client-service:
+        connectTimeout: 3000
+        readTimeout: 3000
+
 management:
   endpoints:
     web:
@@ -56,11 +67,6 @@ management:
 
 logging:
   level:
-    com.bordero.client: DEBUG
+    com.bordero.nfe: DEBUG
     org.springframework: INFO
     org.hibernate.SQL: DEBUG
-
-# JWT pode ficar, mas não será usado
-jwt:
-  secret: seu-segredo-super-secreto-de-256-bits-minimo-para-seguranca
-  expiration: 86400000
