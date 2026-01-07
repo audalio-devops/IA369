@@ -1,7 +1,9 @@
 package com.bordero.bordero.service;
 
+import com.bordero.bordero.client.ClientServiceClient;
 import com.bordero.bordero.domain.model.*;
 import com.bordero.bordero.repository.BorderoRepository;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -32,6 +34,7 @@ public class BorderoGeneratorService {
     private final NFeClientService nfeClientService;
     private final TarifaService tarifaService;
     private final DiaUtilService diaUtilService;
+    private final ClientServiceClient clientServiceClient;
 
     private static final int FLOAT_BASE = 2; // D+2 padrão
 
@@ -433,6 +436,22 @@ public class BorderoGeneratorService {
         }
 
         return null;
+    }
+
+    private void descontarLimiteCliente(String cnpj, BigDecimal valor) {
+        try {
+            clientServiceClient.descontarLimite(cnpj, valor);
+            log.info("Limite descontado com sucesso para cliente {}: R$ {}", cnpj, valor);
+        } catch (FeignException.BadRequest e) {
+            log.error("Erro ao descontar limite - Cliente sem limite suficiente: {}", cnpj);
+            throw new IllegalStateException("Cliente não possui limite suficiente", e);
+        } catch (FeignException.NotFound e) {
+            log.error("Cliente não encontrado: {}", cnpj);
+            throw new IllegalStateException("Cliente não encontrado", e);
+        } catch (FeignException e) {
+            log.error("Erro ao comunicar com client-service", e);
+            throw new IllegalStateException("Erro ao descontar limite do cliente", e);
+        }
     }
 
 }

@@ -54,9 +54,31 @@ services:
       timeout: 5s
       retries: 5
 
+  client-service:
+    build:
+      context: ./client-service
+      dockerfile: Dockerfile
+    container_name: client-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-client:5432/client_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    networks:
+      - bordero-network
+    depends_on:
+      - postgres
+      - eureka-server
+
 networks:
   bordero-network:
     driver: bridge
 
 volumes:
   postgres_data:
+
+
+
