@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ia369
+  labels:
+    name: ia369
+    environment: production
+    app: bordero-system

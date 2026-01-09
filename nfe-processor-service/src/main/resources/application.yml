@@ -61,14 +61,21 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
       show-details: always
       probes:
         enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
 
 logging:
   level:
     com.bordero.nfe: DEBUG
     org.springframework: INFO
     org.hibernate.SQL: DEBUG
+

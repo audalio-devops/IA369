@@ -60,6 +60,11 @@
             <version>1.5.5.Final</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Para Spring Security
         <dependency>
             <groupId>org.springframework.boot</groupId>
