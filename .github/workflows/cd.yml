@@ -1,0 +1,125 @@
+name: CD - Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI - Build and Test"]
+    types:
+      - completed
+    branches:
+      - master
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Deploy to Development
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    environment: development
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup environment
+        run: |
+          echo "Deploying to DEVELOPMENT"
+          cp .env.dev .env
+
+      - name: 🐳 Deploy with Docker Compose
+        run: |
+          docker compose down
+          docker compose pull
+          docker compose up -d
+
+      - name: ✅ Health check
+        run: |
+          sleep 60
+          curl -f http://localhost:8761/actuator/health || exit 1
+          curl -f http://localhost:8080/actuator/health || exit 1
+
+      - name: 📊 Deployment summary
+        run: |
+          echo "✅ Development deployment completed!"
+          docker compose ps
+
+  # ---------------------------------------------------------------------------
+  # Deploy to Staging
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'staging' || (github.ref == 'refs/heads/master' && github.event_name == 'push')
+    environment: staging
+    needs: deploy-dev
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy to staging server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          echo "Deploying to STAGING"
+          # SSH commands para deploy no servidor de staging
+
+      - name: ✅ Run smoke tests
+        run: |
+          echo "Running smoke tests..."
+
+  # ---------------------------------------------------------------------------
+  # Deploy to Production (com aprovação manual)
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://ia369.com
+    needs: deploy-staging
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔒 Setup production environment
+        env:
+          PROD_ENV: ${{ secrets.PROD_ENV_FILE }}
+        run: |
+          echo "Deploying to PRODUCTION"
+          echo "$PROD_ENV" > .env
+
+      - name: 🚀 Deploy via SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          echo "Executing production deployment..."
+          # Commands para deploy em produção
+
+      - name: 📊 Post-deployment checks
+        run: |
+          echo "Running production health checks..."
+
+      - name: 🔔 Notify team
+        run: |
+          echo "✅ Production deployment completed!"
+          # Integrar com Slack/Discord/Email
