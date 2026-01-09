@@ -2,13 +2,14 @@ version: '3.8'
 
 services:
   # ---------------------------------------------------------------------------
-  # KAFKA
+  # KAFKA (KRaft Mode - sem Zookeeper)
   # ---------------------------------------------------------------------------
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     restart: always
     hostname: kafka
+    user: root
     ports:
       - "9092:9092"
     environment:
@@ -27,9 +28,15 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     networks:
       - bordero-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   # ---------------------------------------------------------------------------
-  # POSTGRES (Com Init Script)
+  # POSTGRES (Com Init Script para múltiplos bancos)
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
@@ -38,13 +45,11 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nfe_db # Banco padrão criado automaticamente
+      POSTGRES_DB: nfe_db
     ports:
       - "5432:5432"
     volumes:
-      # Persistência dos dados
       - postgres_data:/var/lib/postgresql/data
-      # Script de inicialização (RO - Read Only)
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - bordero-network
@@ -53,32 +58,191 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
+  # ---------------------------------------------------------------------------
+  # EUREKA SERVER (Service Discovery)
+  # ---------------------------------------------------------------------------
+  eureka-server:
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
+    container_name: eureka-server
+    restart: always
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+      EUREKA_INSTANCE_HOSTNAME: eureka-server
+    networks:
+      - bordero-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8761 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # NFE PROCESSOR SERVICE
+  # ---------------------------------------------------------------------------
+  nfe-processor-service:
+    build:
+      context: ./nfe-processor-service
+      dockerfile: Dockerfile
+    container_name: nfe-processor-service
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nfe_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: nfe-processor-service
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    networks:
+      - bordero-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # CLIENT SERVICE
+  # ---------------------------------------------------------------------------
   client-service:
     build:
       context: ./client-service
       dockerfile: Dockerfile
     container_name: client-service
+    restart: always
     ports:
       - "8084:8084"
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-client:5432/client_db
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/client_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: client-service
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
     networks:
       - bordero-network
     depends_on:
-      - postgres
-      - eureka-server
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8084 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
 
+  # ---------------------------------------------------------------------------
+  # BORDERO GENERATOR SERVICE
+  # ---------------------------------------------------------------------------
+  bordero-generator-service:
+    build:
+      context: ./bordero-generator-service
+      dockerfile: Dockerfile
+    container_name: bordero-generator-service
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bordero_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: bordero-generator-service
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    networks:
+      - bordero-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      client-service:
+        condition: service_healthy
+      nfe-processor-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8082 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # API GATEWAY
+  # ---------------------------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: api-gateway
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    networks:
+      - bordero-network
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      nfe-processor-service:
+        condition: service_healthy
+      client-service:
+        condition: service_healthy
+      bordero-generator-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+# ---------------------------------------------------------------------------
+# NETWORKS
+# ---------------------------------------------------------------------------
 networks:
   bordero-network:
     driver: bridge
+    name: bordero-network
 
+# ---------------------------------------------------------------------------
+# VOLUMES
+# ---------------------------------------------------------------------------
 volumes:
   postgres_data:
-
-
-
+    driver: local
+    name: postgres_data
+  kafka_data:
+    driver: local
+    name: kafka_data

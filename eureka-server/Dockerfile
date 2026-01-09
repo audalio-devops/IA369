@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline -B
 # Copiar código fonte
 COPY src ./src
 
-# Build do projeto
+# Build do projeto (skipTests para acelerar)
 RUN mvn clean package -DskipTests
 
 # Stage 2: Runtime
@@ -21,24 +21,20 @@ RUN apk add --no-cache wget netcat-openbsd
 
 # Criar usuário não-root para segurança
 RUN addgroup -S spring && adduser -S spring -G spring
-
-# Criar diretório para uploads (se necessário)
-RUN mkdir -p /app/uploads && chown spring:spring /app/uploads
-
 USER spring:spring
 
 # Copiar JAR da stage de build
 COPY --from=build /app/target/*.jar app.jar
 
-# Expor porta do Client Service
-EXPOSE 8084
+# Expor porta do Eureka Server
+EXPOSE 8761
 
-# Variáveis de ambiente
+# Variáveis de ambiente (podem ser sobrescritas no docker-compose)
 ENV JAVA_OPTS="-Xmx512m -Xms256m"
 
 # Health check
-HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=5 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8084/actuator/health || exit 1
+HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8761/actuator/health || exit 1
 
 # Comando de inicialização
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

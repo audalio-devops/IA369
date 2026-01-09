@@ -11,7 +11,6 @@ C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\cl
 C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\controller\ClientController.java
 C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\domain\model\Client.java
 C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\domain\model\DocumentStatus.java
-C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\config\SecurityConfig.java
 C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\domain\model\ClientDocument.java
 C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\service\CreditAnalysisService.java
 C:\Projetos\IA369\nfe-bordero-system\client-service\src\main\java\com\bordero\client\domain\dto\CreditAnalysisDTO.java

@@ -3,6 +3,8 @@ C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com
 C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\service\DiaUtilService.java
 C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\domain\model\TituloBordero.java
 C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\domain\model\Tarifa.java
+C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\client\ClientServiceClient.java
+C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\client\dto\ClientDTO.java
 C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\domain\model\StatusBordero.java
 C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\service\NFeClientService.java
 C:\Projetos\IA369\nfe-bordero-system\bordero-generator-service\src\main\java\com\bordero\bordero\service\CalculoTarifasResult.java

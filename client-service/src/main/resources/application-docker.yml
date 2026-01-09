@@ -5,25 +5,26 @@ spring:
   application:
     name: client-service
 
+  security:
+    enabled: false
+
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-client:5432/client_db}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    url: jdbc:postgresql://postgres:5432/client_db
+    username: postgres
+    password: postgres
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
-      minimum-idle: 5
       connection-timeout: 30000
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-        use_sql_comments: false
 
   servlet:
     multipart:
@@ -33,13 +34,16 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+      defaultZone: http://eureka-server:8761/eureka/
     register-with-eureka: true
     fetch-registry: true
+    registry-fetch-interval-seconds: 5
   instance:
-    prefer-ip-address: true
-    hostname: ${HOSTNAME:client-service}
-    instance-id: ${spring.application.name}:${random.value}
+    prefer-ip-address: false
+    hostname: client-service
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 10
 
 management:
   endpoints:
@@ -49,27 +53,13 @@ management:
   endpoint:
     health:
       show-details: always
-  metrics:
-    export:
-      prometheus:
-        enabled: true
 
 logging:
   level:
-    com.bordero.client: INFO
+    com.bordero.client: DEBUG
     org.springframework: INFO
     org.hibernate.SQL: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
-# Configurações customizadas
-client:
-  documents:
-    upload-dir: /app/uploads/client-documents
-    max-file-size: 10485760 # 10MB em bytes
-    allowed-extensions: pdf,jpg,jpeg,png
-
-jwt:
-  secret: ${JWT_SECRET:seu-segredo-super-secreto-de-256-bits-minimo-para-seguranca}
-  expiration: ${JWT_EXPIRATION:86400000} # 24 horas
+#jwt:
+#  secret: seu-segredo-super-secreto-de-256-bits-minimo-para-seguranca
+#  expiration: 86400000

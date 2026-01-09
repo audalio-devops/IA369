@@ -5,7 +5,7 @@ import com.bordero.client.service.ClientService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
-import org.springframework.security.access.prepost.PreAuthorize;
+//import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -18,7 +18,7 @@ public class ClientController {
     private final ClientService service;
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    //@PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ClientDTO> cadastrar(
             @Valid @RequestBody ClientRegistrationRequest request) {
         ClientDTO client = service.cadastrarCliente(request);
@@ -26,28 +26,28 @@ public class ClientController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    //@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<ClientDTO> buscarPorId(@PathVariable Long id) {
         ClientDTO client = service.buscarPorId(id);
         return ResponseEntity.ok(client);
     }
 
     @GetMapping("/cnpj/{cnpj}")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    //@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<ClientDTO> buscarPorCnpj(@PathVariable String cnpj) {
         ClientDTO client = service.buscarPorCnpj(cnpj);
         return ResponseEntity.ok(client);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    //@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<List<ClientDTO>> listarAtivos() {
         List<ClientDTO> clients = service.listarAtivos();
         return ResponseEntity.ok(clients);
     }
 
     @PutMapping("/{id}/limite")
-    @PreAuthorize("hasRole('ADMIN')")
+    //@PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> atualizarLimite(
             @PathVariable Long id,
             @RequestParam BigDecimal limite) {
@@ -56,7 +56,7 @@ public class ClientController {
     }
 
     @PostMapping("/cnpj/{cnpj}/descontar")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    //@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<Void> descontarLimite(
             @PathVariable String cnpj,
             @RequestParam BigDecimal valor) {

@@ -5,12 +5,11 @@ spring:
   application:
     name: bordero-generator-service
 
-  # ? ADICIONAR ESTA SEÇÃO
   security:
     enabled: false
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/bordero_db
+    url: jdbc:postgresql://postgres:5432/bordero_db
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -28,7 +27,7 @@ spring:
         format_sql: true
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:29092
     consumer:
       group-id: bordero-generator
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -39,13 +38,13 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://eureka-server:8761/eureka/
     register-with-eureka: true
     fetch-registry: true
     registry-fetch-interval-seconds: 5
   instance:
     prefer-ip-address: false
-    hostname: localhost
+    hostname: bordero-generator-service
     instance-id: ${spring.application.name}:${server.port}
     lease-renewal-interval-in-seconds: 5
     lease-expiration-duration-in-seconds: 10
