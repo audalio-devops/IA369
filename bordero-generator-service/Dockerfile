@@ -22,23 +22,24 @@ RUN apk add --no-cache wget netcat-openbsd
 # Criar usuário não-root para segurança
 RUN addgroup -S spring && adduser -S spring -G spring
 
-# Criar diretório para uploads (se necessário)
-RUN mkdir -p /app/uploads && chown spring:spring /app/uploads
+# Criar diretório para arquivos gerados
+RUN mkdir -p /app/reports && chown spring:spring /app/reports
 
 USER spring:spring
 
 # Copiar JAR da stage de build
 COPY --from=build /app/target/*.jar app.jar
 
-# Expor porta do Client Service
-EXPOSE 8084
+# Expor porta do Bordero Generator Service
+EXPOSE 8082
 
 # Variáveis de ambiente
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+# Aumentar memória pois gera relatórios/PDFs
+ENV JAVA_OPTS="-Xmx768m -Xms384m"
 
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=5 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8084/actuator/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health || exit 1
 
 # Comando de inicialização
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -59,12 +59,14 @@
             <artifactId>mapstruct</artifactId>
             <version>1.5.5.Final</version>
         </dependency>
+
+        <!-- Para Spring Security
         <dependency>
-            <groupId>com.bordero</groupId>
-            <artifactId>client-service</artifactId>
-            <version>1.0.0</version>
-            <scope>compile</scope>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        -->
+
     </dependencies>
 
     <dependencyManagement>

@@ -1,16 +1,15 @@
 server:
-  port: 8082
+  port: 8081
 
 spring:
   application:
-    name: bordero-generator-service
+    name: nfe-processor-service
 
-  # ? ADICIONAR ESTA SEÇÃO
   security:
     enabled: false
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/bordero_db
+    url: jdbc:postgresql://postgres:5432/nfe_db
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -28,24 +27,21 @@ spring:
         format_sql: true
 
   kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: bordero-generator
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "*"
+    bootstrap-servers: kafka:29092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://eureka-server:8761/eureka/
     register-with-eureka: true
     fetch-registry: true
     registry-fetch-interval-seconds: 5
   instance:
     prefer-ip-address: false
-    hostname: localhost
+    hostname: nfe-processor-service
     instance-id: ${spring.application.name}:${server.port}
     lease-renewal-interval-in-seconds: 5
     lease-expiration-duration-in-seconds: 10
@@ -59,21 +55,21 @@ feign:
       client-service:
         connectTimeout: 3000
         readTimeout: 3000
-      nfe-processor-service:
-        connectTimeout: 3000
-        readTimeout: 3000
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
       show-details: always
+  server:
+    port: 8081  # Mesma porta da aplicação
 
 logging:
   level:
-    com.bordero.bordero: DEBUG
+    com.bordero.nfe: DEBUG
     org.springframework: INFO
     org.hibernate.SQL: DEBUG
