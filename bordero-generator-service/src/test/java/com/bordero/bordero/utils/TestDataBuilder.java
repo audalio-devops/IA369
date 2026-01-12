@@ -20,9 +20,10 @@ public class TestDataBuilder {
                 .nomeFundo("FIDC MACRO FUND")
                 .valorBruto(new BigDecimal("19500.00"))
                 .valorDesagio(new BigDecimal("1911.00"))
-                .valorTarifas(new BigDecimal("167.50"))
-                .valorLiquido(new BigDecimal("17421.50"))
+                .valorTarifas(new BigDecimal("245.00")) // ATUALIZADO (3 x 15 + 50 + 150)
+                .valorLiquido(new BigDecimal("17344.00")) // ATUALIZADO
                 .quantidadeTitulos(3)
+                .quantidadeSacados(1) // NOVO CAMPO
                 .prazoMedio(196)
                 .status(StatusBordero.GERADO)
                 .build();
@@ -45,22 +46,29 @@ public class TestDataBuilder {
                 .dataVencimento(vencimento)
                 .valorBruto(new BigDecimal("6500.00"))
                 .diasParaVencimento(196)
-                .taxaDesagio(new BigDecimal("1.50"))
+                .diasUteis(150) // NOVO CAMPO
+                .prazoAdicional(0) // NOVO CAMPO
+                .floatDias(2) // NOVO CAMPO
+                .taxaDesagio(new BigDecimal("1.75")) // Percentual (1.75%)
                 .valorDesagio(new BigDecimal("637.00"))
-                .valorLiquido(new BigDecimal("5860.50"))
+                .valorLiquido(new BigDecimal("5848.00")) // ATUALIZADO (6500 - 637 - 15)
+                .tarifaDocumento(new BigDecimal("15.00")) // NOVO CAMPO
                 .cnpjSacado("13771702000110")
                 .nomeSacado("THAIS RODRIGUES")
+                .cnpjEmitente("16554601000186") // NOVO CAMPO
+                .nomeEmitente("VICOLACCI") // NOVO CAMPO
                 .build();
     }
 
     public static List<Tarifa> criarTarifasPadrao() {
         List<Tarifa> tarifas = new ArrayList<>();
 
+        // VALORES ATUALIZADOS
         tarifas.add(Tarifa.builder()
                 .tipo(TipoTarifa.DOCUMENTO)
                 .codigo("TAR_DOC")
                 .nome("Tarifa por Título")
-                .valor(new BigDecimal("2.50"))
+                .valor(new BigDecimal("15.00")) // ATUALIZADO
                 .ativa(true)
                 .build());
 
@@ -68,7 +76,7 @@ public class TestDataBuilder {
                 .tipo(TipoTarifa.CLIENTE)
                 .codigo("SERASA")
                 .nome("Consulta Serasa")
-                .valor(new BigDecimal("10.00"))
+                .valor(new BigDecimal("50.00")) // ATUALIZADO
                 .ativa(true)
                 .build());
 

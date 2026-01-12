@@ -38,6 +38,7 @@ class DiaUtilServiceTest {
                 .thenReturn(Collections.emptyList());
     }
 
+
     @Test
     @DisplayName("Deve identificar sábado como fim de semana")
     void deveIdentificarSabadoComoFimDeSemana() {

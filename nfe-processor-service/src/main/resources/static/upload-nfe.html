@@ -433,7 +433,7 @@
                 🗑️ Limpar Tudo
             </button>
             <button class="btn btn-primary" id="uploadBtn" onclick="processarArquivos()" disabled>
-                ⬆️ Processar NFes
+                ⬆️ Processar NFes e Gerar Borderô
             </button>
         </div>
 
@@ -447,7 +447,11 @@
 
     <script>
         let arquivosSelecionados = [];
-        const API_BASE_URL = 'http://localhost:8081'; // Porta do nfe-processor-service
+        
+        // CORRIGIDO: Porta 8081 (nfe-processor) para processar NFes
+        // Porta 8082 (bordero-generator) para gerar borderô
+        const NFE_API_URL = 'http://localhost:8081';
+        const BORDERO_API_URL = 'http://localhost:8082';
 
         // Elementos DOM
         const uploadArea = document.getElementById('uploadArea');
@@ -583,46 +587,81 @@
             progressBar.classList.add('show');
             results.classList.remove('show');
 
-            const formData = new FormData();
-            arquivosSelecionados.forEach(arquivo => {
-                formData.append('arquivos', arquivo);
-            });
-            formData.append('cnpjCliente', cnpj);
-
             try {
-                let progresso = 0;
-                const intervalo = setInterval(() => {
-                    if (progresso < 90) {
-                        progresso += 10;
-                        atualizarProgresso(progresso);
-                    }
-                }, 200);
-
-                const response = await fetch(`${API_BASE_URL}/nfe/upload-lote`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                clearInterval(intervalo);
-                atualizarProgresso(100);
-
-                if (!response.ok) {
-                    throw new Error('Erro ao processar arquivos: ' + response.statusText);
+                // ETAPA 1: Processar NFes (porta 8081)
+                atualizarProgresso(10);
+                const nfeIds = await processarNFes();
+                
+                if (!nfeIds || nfeIds.length === 0) {
+                    throw new Error('Nenhuma NFe foi processada com sucesso');
                 }
 
-                const resultado = await response.json();
-                exibirResultados(resultado);
+                // ETAPA 2: Gerar Borderô com as NFes processadas (porta 8082)
+                atualizarProgresso(70);
+                const bordero = await gerarBordero(cnpj, nfeIds);
+                
+                atualizarProgresso(100);
+                exibirResultadoSucesso(bordero, nfeIds.length);
 
             } catch (error) {
                 console.error('Erro:', error);
-                alert('❌ Erro ao processar arquivos: ' + error.message);
+                alert('❌ Erro ao processar: ' + error.message);
             } finally {
                 uploadBtn.disabled = false;
-                uploadBtn.innerHTML = '⬆️ Processar NFes';
+                uploadBtn.innerHTML = '⬆️ Processar NFes e Gerar Borderô';
                 setTimeout(() => {
                     progressBar.classList.remove('show');
                 }, 1000);
             }
+        }
+
+        async function processarNFes() {
+            const formData = new FormData();
+            arquivosSelecionados.forEach(arquivo => {
+                formData.append('arquivos', arquivo);
+            });
+            formData.append('cnpjCliente', cnpjInput.value.trim());
+
+            const response = await fetch(`${NFE_API_URL}/nfe/upload-lote`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Erro ao processar NFes: ' + response.statusText);
+            }
+
+            const resultado = await response.json();
+            
+            // Extrair IDs das NFes processadas com sucesso
+            const nfeIds = resultado.resultados
+                .filter(r => r.sucesso && r.id)
+                .map(r => r.id);
+
+            if (nfeIds.length === 0) {
+                throw new Error('Nenhuma NFe foi processada corretamente');
+            }
+
+            return nfeIds;
+        }
+
+        async function gerarBordero(cnpj, nfeIds) {
+            const response = await fetch(`${BORDERO_API_URL}/bordero/gerar-multiplas`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    cnpjCliente: cnpj,
+                    nfeIds: nfeIds
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Erro ao gerar borderô: ' + response.statusText);
+            }
+
+            return await response.json();
         }
 
         function atualizarProgresso(valor) {
@@ -630,60 +669,51 @@
             progressFill.textContent = valor + '%';
         }
 
-        function exibirResultados(dados) {
+        function exibirResultadoSucesso(bordero, totalNFes) {
             results.classList.add('show');
 
             document.getElementById('summary').innerHTML = `
                 <div class="summary-card">
-                    <div class="summary-value total-color">${dados.totalArquivos}</div>
-                    <div class="summary-label">Total Processados</div>
+                    <div class="summary-value success-color">✅</div>
+                    <div class="summary-label">Borderô Gerado</div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-value success-color">${dados.sucessos}</div>
-                    <div class="summary-label">✅ Sucessos</div>
+                    <div class="summary-value total-color">${totalNFes}</div>
+                    <div class="summary-label">NFes Processadas</div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-value error-color">${dados.erros}</div>
-                    <div class="summary-label">❌ Erros</div>
+                    <div class="summary-value total-color">${bordero.quantidadeTitulos}</div>
+                    <div class="summary-label">Títulos Gerados</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value total-color">${bordero.quantidadeSacados}</div>
+                    <div class="summary-label">Sacados Únicos</div>
                 </div>
             `;
 
             const resultsList = document.getElementById('resultsList');
-            resultsList.innerHTML = '<h3 style="margin-bottom: 15px;">📋 Detalhes por Arquivo</h3>';
-
-            dados.resultados.forEach(item => {
-                const div = document.createElement('div');
-                div.className = `result-item ${item.sucesso ? 'success' : 'error'}`;
-                
-                let detalhes = '';
-                if (item.sucesso) {
-                    detalhes = `
-                        <div class="result-details">
-                            <strong>✅ Chave de Acesso:</strong> ${item.chaveAcesso || 'N/A'}<br>
-                            <strong>📄 Número da Nota:</strong> ${item.numeroNota || 'N/A'}<br>
-                            <strong>💰 Valor Total:</strong> R$ ${item.valorTotal ? item.valorTotal.toFixed(2) : '0.00'}<br>
-                            <strong>📊 Duplicatas:</strong> ${item.quantidadeDuplicatas || 0}
-                        </div>
-                    `;
-                } else {
-                    const errosMsg = item.erros && item.erros.length > 0 
-                        ? item.erros.join('<br>') 
-                        : item.mensagem;
-                    detalhes = `<div class="result-details" style="color: #dc3545;">❌ ${errosMsg}</div>`;
-                }
-
-                div.innerHTML = `
+            resultsList.innerHTML = `
+                <h3 style="margin-bottom: 15px;">📋 Detalhes do Borderô</h3>
+                <div class="result-item success">
                     <div class="result-header">
-                        <span class="result-title">${item.nomeArquivo}</span>
-                        <span class="file-status ${item.sucesso ? 'status-success' : 'status-error'}">
-                            ${item.sucesso ? '✅ SUCESSO' : '❌ ERRO'}
-                        </span>
+                        <span class="result-title">Borderô ${bordero.numeroBordero}</span>
+                        <span class="file-status status-success">✅ GERADO</span>
                     </div>
-                    ${detalhes}
-                `;
-                
-                resultsList.appendChild(div);
-            });
+                    <div class="result-details">
+                        <strong>📊 Quantidade de Títulos:</strong> ${bordero.quantidadeTitulos}<br>
+                        <strong>👥 Sacados Únicos:</strong> ${bordero.quantidadeSacados}<br>
+                        <strong>💰 Valor Bruto Total:</strong> R$ ${bordero.valorBruto.toFixed(2)}<br>
+                        <strong>📉 Deságio Total:</strong> R$ ${bordero.valorDesagio.toFixed(2)}<br>
+                        <strong>💵 Valor Líquido:</strong> R$ ${bordero.valorLiquido.toFixed(2)}<br>
+                        <strong>📄 Status:</strong> ${bordero.status}<br>
+                        <br>
+                        <a href="${BORDERO_API_URL}/bordero/${bordero.id}/pdfall" target="_blank" 
+                           style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px;">
+                            📥 Baixar PDF do Borderô
+                        </a>
+                    </div>
+                </div>
+            `;
 
             results.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }

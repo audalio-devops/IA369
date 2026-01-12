@@ -33,26 +33,26 @@ class TarifaServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Tarifas por documento
+        // Tarifas por documento - ATUALIZADO para R$ 15,00
         tarifasDocumento = List.of(
                 Tarifa.builder()
                         .id(1L)
                         .tipo(TipoTarifa.DOCUMENTO)
                         .codigo("TAR_DOC")
                         .nome("Tarifa por Título")
-                        .valor(new BigDecimal("2.50"))
+                        .valor(new BigDecimal("15.00")) // ATUALIZADO
                         .ativa(true)
                         .build()
         );
 
-        // Tarifas por cliente
+        // Tarifas por cliente - ATUALIZADO para R$ 50,00
         tarifasCliente = List.of(
                 Tarifa.builder()
                         .id(2L)
                         .tipo(TipoTarifa.CLIENTE)
                         .codigo("SERASA")
                         .nome("Consulta Serasa")
-                        .valor(new BigDecimal("10.00"))
+                        .valor(new BigDecimal("50.00")) // ATUALIZADO
                         .ativa(true)
                         .build()
         );
@@ -96,10 +96,10 @@ class TarifaServiceTest {
         CalculoTarifasResult result = tarifaService.calcularTarifas(quantidadeTitulos, incluirSerasa);
 
         // Assert
-        assertEquals(new BigDecimal("7.50"), result.getTarifasPorDocumento()); // 3 x 2.50
-        assertEquals(new BigDecimal("10.00"), result.getTarifasPorCliente()); // Serasa
+        assertEquals(new BigDecimal("45.00"), result.getTarifasPorDocumento()); // 3 x 15.00
+        assertEquals(new BigDecimal("50.00"), result.getTarifasPorCliente()); // Serasa
         assertEquals(new BigDecimal("150.00"), result.getTarifasGerais()); // TAC + TED
-        assertEquals(new BigDecimal("167.50"), result.getValorTotal());
+        assertEquals(new BigDecimal("245.00"), result.getValorTotal()); // ATUALIZADO
     }
 
     @Test
@@ -113,10 +113,10 @@ class TarifaServiceTest {
         CalculoTarifasResult result = tarifaService.calcularTarifas(quantidadeTitulos, incluirSerasa);
 
         // Assert
-        assertEquals(new BigDecimal("7.50"), result.getTarifasPorDocumento());
+        assertEquals(new BigDecimal("45.00"), result.getTarifasPorDocumento()); // 3 x 15.00
         assertEquals(BigDecimal.ZERO, result.getTarifasPorCliente()); // Sem Serasa
         assertEquals(new BigDecimal("150.00"), result.getTarifasGerais());
-        assertEquals(new BigDecimal("157.50"), result.getValorTotal());
+        assertEquals(new BigDecimal("195.00"), result.getValorTotal()); // ATUALIZADO
     }
 
     @Test
@@ -130,10 +130,10 @@ class TarifaServiceTest {
         CalculoTarifasResult result = tarifaService.calcularTarifas(quantidadeTitulos, incluirSerasa);
 
         // Assert
-        assertEquals(new BigDecimal("2.50"), result.getTarifasPorDocumento());
-        assertEquals(new BigDecimal("10.00"), result.getTarifasPorCliente());
+        assertEquals(new BigDecimal("15.00"), result.getTarifasPorDocumento()); // 1 x 15.00
+        assertEquals(new BigDecimal("50.00"), result.getTarifasPorCliente());
         assertEquals(new BigDecimal("150.00"), result.getTarifasGerais());
-        assertEquals(new BigDecimal("162.50"), result.getValorTotal());
+        assertEquals(new BigDecimal("215.00"), result.getValorTotal()); // ATUALIZADO
     }
 
     @Test
@@ -147,10 +147,10 @@ class TarifaServiceTest {
         CalculoTarifasResult result = tarifaService.calcularTarifas(quantidadeTitulos, incluirSerasa);
 
         // Assert
-        assertEquals(new BigDecimal("25.00"), result.getTarifasPorDocumento()); // 10 x 2.50
-        assertEquals(new BigDecimal("10.00"), result.getTarifasPorCliente());
+        assertEquals(new BigDecimal("150.00"), result.getTarifasPorDocumento()); // 10 x 15.00
+        assertEquals(new BigDecimal("50.00"), result.getTarifasPorCliente());
         assertEquals(new BigDecimal("150.00"), result.getTarifasGerais());
-        assertEquals(new BigDecimal("185.00"), result.getValorTotal());
+        assertEquals(new BigDecimal("350.00"), result.getValorTotal()); // ATUALIZADO
     }
 
     @Test

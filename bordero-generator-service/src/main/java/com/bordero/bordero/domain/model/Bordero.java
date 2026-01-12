@@ -1,5 +1,6 @@
 package com.bordero.bordero.domain.model;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -28,14 +29,20 @@ public class Bordero {
     @Column(nullable = false)
     private String nomeCedente;
 
+    // CAMPO ADICIONADO: CNPJ do cliente que está fazendo o upload
+    @Column(length = 14)
+    private String cnpjCliente;
+
     @Column(length = 14)
     private String cnpjFundo;
 
     @Column
     private String nomeFundo;
 
+    // IMPORTANTE: JsonManagedReference para evitar loop infinito
     @OneToMany(mappedBy = "bordero", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    @JsonManagedReference
     private List<TituloBordero> titulos = new ArrayList<>();
 
     // Valores
@@ -58,11 +65,15 @@ public class Bordero {
     private BigDecimal valorLiquido;
 
     @Column(columnDefinition = "TEXT")
-    private String tarifasDetalhamento; // JSON com detalhamento das tarifas    
-    
+    private String tarifasDetalhamento;
+
     // Estatísticas
     @Column
     private Integer quantidadeTitulos;
+
+    // CAMPO ADICIONADO: Quantidade de sacados únicos
+    @Column
+    private Integer quantidadeSacados;
 
     @Column
     private Integer prazoMedio;
@@ -109,5 +120,13 @@ public class Bordero {
         return "BOR" + System.currentTimeMillis();
     }
 
+    /**
+     * Calcula quantidade de sacados únicos
+     */
+    public void calcularQuantidadeSacados() {
+        this.quantidadeSacados = (int) this.titulos.stream()
+                .map(TituloBordero::getCnpjSacado)
+                .distinct()
+                .count();
+    }
 }
-

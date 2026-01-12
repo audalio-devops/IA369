@@ -1,23 +1,31 @@
--- Limpar tarifas existentes
-DELETE FROM tarifas;
+-- ========================================
+-- SCRIPT PARA EXECUTAR MANUALMENTE
+-- Execute este script APÓS a aplicação criar as tabelas
+-- ========================================
 
--- Tarifas por documento
-INSERT INTO tarifas (tipo, codigo, nome, descricao, valor, ativa, data_criacao, data_atualizacao) VALUES
-('DOCUMENTO', 'TAR_DOC', 'Tarifa por Título', 'Tarifa cobrada por cada título do borderô', 2.50, true, NOW(), NOW());
+-- Executar via psql:
+-- psql -U postgres -d bordero_db -f insert_dados_iniciais.sql
 
--- Tarifas por cliente
-INSERT INTO tarifas (tipo, codigo, nome, descricao, valor, ativa, data_criacao, data_atualizacao) VALUES
-('CLIENTE', 'SERASA', 'Consulta Serasa', 'Consulta de crédito no Serasa', 10.00, true, NOW(), NOW());
+-- 1. Limpar dados existentes (se necessário)
+TRUNCATE TABLE tarifas CASCADE;
+TRUNCATE TABLE feriados CASCADE;
+TRUNCATE TABLE tipos_titulo CASCADE;
 
--- Tarifas gerais
+-- 2. Inserir Tipos de Título
+INSERT INTO tipos_titulo (tipo, nome, descricao, ativo, data_criacao, data_atualizacao) VALUES
+('NF', 'Nota Fiscal', 'Título existente em uma nota fiscal', true, NOW(), NOW()),
+('CHQ', 'Cheque', 'Título em forma de cheque', true, NOW(), NOW()),
+('DUP', 'Duplicata', 'Duplicata mercantil', true, NOW(), NOW()),
+('BOL', 'Boleto', 'Boleto bancário', true, NOW(), NOW());
+
+-- 3. Inserir Tarifas (VALORES CONFORME ESPECIFICAÇÃO)
 INSERT INTO tarifas (tipo, codigo, nome, descricao, valor, ativa, data_criacao, data_atualizacao) VALUES
+('DOCUMENTO', 'TAR_DOC', 'Tarifa por Título', 'Tarifa cobrada por cada título do borderô', 15.00, true, NOW(), NOW()),
+('CLIENTE', 'SERASA', 'Consulta Serasa', 'Consulta de crédito no Serasa (por sacado)', 50.00, true, NOW(), NOW()),
 ('GERAL', 'TAC', 'TAC - Tarifa de Abertura de Crédito', 'Taxa cobrada na abertura do crédito', 100.00, true, NOW(), NOW()),
 ('GERAL', 'TED', 'TED - Transferência Eletrônica', 'Taxa de transferência bancária', 50.00, true, NOW(), NOW());
 
--- Limpar feriados existentes
-DELETE FROM feriados;
-
--- Feriados Nacionais 2025
+-- 4. Inserir Feriados Nacionais 2025
 INSERT INTO feriados (data, nome, tipo, descricao, ativo) VALUES
 ('2025-01-01', 'Confraternização Universal', 'NACIONAL', 'Ano Novo', true),
 ('2025-03-04', 'Carnaval', 'NACIONAL', 'Carnaval', true),
@@ -32,7 +40,7 @@ INSERT INTO feriados (data, nome, tipo, descricao, ativo) VALUES
 ('2025-11-20', 'Consciência Negra', 'NACIONAL', 'Consciência Negra', true),
 ('2025-12-25', 'Natal', 'NACIONAL', 'Natal', true);
 
--- Feriados Nacionais 2026
+-- 5. Inserir Feriados Nacionais 2026
 INSERT INTO feriados (data, nome, tipo, descricao, ativo) VALUES
 ('2026-01-01', 'Confraternização Universal', 'NACIONAL', 'Ano Novo', true),
 ('2026-02-17', 'Carnaval', 'NACIONAL', 'Carnaval', true),
@@ -47,12 +55,24 @@ INSERT INTO feriados (data, nome, tipo, descricao, ativo) VALUES
 ('2026-11-20', 'Consciência Negra', 'NACIONAL', 'Consciência Negra', true),
 ('2026-12-25', 'Natal', 'NACIONAL', 'Natal', true);
 
--- Feriados Estaduais SP
+-- 6. Inserir Feriados Estaduais SP
 INSERT INTO feriados (data, nome, tipo, descricao, uf, ativo) VALUES
 ('2025-07-09', 'Revolução Constitucionalista', 'ESTADUAL', 'Revolução de 1932', 'SP', true),
 ('2026-07-09', 'Revolução Constitucionalista', 'ESTADUAL', 'Revolução de 1932', 'SP', true);
 
--- Feriados Municipais São Paulo
+-- 7. Inserir Feriados Municipais São Paulo
 INSERT INTO feriados (data, nome, tipo, descricao, uf, codigo_municipio, ativo) VALUES
 ('2025-01-25', 'Aniversário de São Paulo', 'MUNICIPAL', 'Aniversário da Cidade', 'SP', '3550308', true),
 ('2026-01-25', 'Aniversário de São Paulo', 'MUNICIPAL', 'Aniversário da Cidade', 'SP', '3550308', true);
+
+-- 8. Verificar inserções
+SELECT 'Tipos de Título:' as tabela, COUNT(*) as total FROM tipos_titulo
+UNION ALL
+SELECT 'Tarifas:', COUNT(*) FROM tarifas
+UNION ALL
+SELECT 'Feriados:', COUNT(*) FROM feriados;
+
+-- Deve mostrar:
+-- Tipos de Título: 4
+-- Tarifas: 4
+-- Feriados: 28

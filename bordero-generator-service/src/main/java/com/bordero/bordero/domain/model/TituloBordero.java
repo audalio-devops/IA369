@@ -18,7 +18,13 @@ public class TituloBordero {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bordero_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonBackReference
     private Bordero bordero;
+
+    // NOVO CAMPO: Tipo do título (NF, Cheque, etc)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "tipo_titulo_id")
+    private TipoTitulo tipoTitulo;
 
     @Column(nullable = false)
     private Long nfeId;
@@ -47,6 +53,15 @@ public class TituloBordero {
     @Column(nullable = false)
     private Integer diasUteis;
 
+    // NOVO CAMPO: PZ - Prazo adicional (por enquanto sempre 0)
+    @Column
+    @Builder.Default
+    private Integer prazoAdicional = 0;
+
+    // NOVO CAMPO: D+ (Float) - dias de compensação bancária
+    @Column
+    private Integer floatDias;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal taxaDesagio;
 
@@ -68,4 +83,11 @@ public class TituloBordero {
 
     @Column(nullable = false)
     private String nomeSacado;
+
+    // Emitente (para facilitar exibição no PDF)
+    @Column(length = 14)
+    private String cnpjEmitente;
+
+    @Column
+    private String nomeEmitente;
 }

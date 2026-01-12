@@ -1,5 +1,4 @@
 #!/bin/bash
-# ~/sync-to-wsl.sh
 
 WINDOWS_PATH="//mnt/c/Projetos/IA369/nfe-bordero-system"
 WSL_PATH="$HOME/IA369"

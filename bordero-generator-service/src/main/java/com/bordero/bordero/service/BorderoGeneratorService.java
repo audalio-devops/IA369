@@ -3,6 +3,7 @@ package com.bordero.bordero.service;
 import com.bordero.bordero.client.ClientServiceClient;
 import com.bordero.bordero.domain.model.*;
 import com.bordero.bordero.repository.BorderoRepository;
+import com.bordero.bordero.repository.TipoTituloRepository;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,16 +15,8 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-
-import com.lowagie.text.*;
-import com.lowagie.text.pdf.*;
-import java.awt.Color;
-import java.io.ByteArrayOutputStream;
-import java.text.NumberFormat;
-import java.time.format.DateTimeFormatter;
 import java.time.LocalDate;
-import java.util.List;
-
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -35,6 +28,8 @@ public class BorderoGeneratorService {
     private final TarifaService tarifaService;
     private final DiaUtilService diaUtilService;
     private final ClientServiceClient clientServiceClient;
+    private final TipoTituloRepository tipoTituloRepository;
+    private final PDFBorderoService pdfBorderoService;
 
     private static final int FLOAT_BASE = 2; // D+2 padrão
 
@@ -48,34 +43,32 @@ public class BorderoGeneratorService {
         }
     }
 
+    /**
+     * NOVO MÉTODO: Gera borderô com múltiplas NFes
+     * Este é o método principal para atender à nova especificação
+     */
     @Transactional
-    public Bordero gerarBorderoAutomatico(Long nfeId) {
-        log.info("Gerando borderô para NF-e ID: {}", nfeId);
+    public Bordero gerarBorderoComMultiplasNFes(String cnpjCliente, List<Long> nfeIds) {
+        log.info("Gerando borderô para cliente {} com {} NFes", cnpjCliente, nfeIds.size());
 
-        // Buscar dados da NF-e via Feign Client
-        Map<String, Object> nfeData = nfeClientService.buscarNFe(nfeId);
+        if (nfeIds == null || nfeIds.isEmpty()) {
+            throw new IllegalArgumentException("Lista de NFes não pode ser vazia");
+        }
 
+        // Buscar ou criar tipo de título NF
+        TipoTitulo tipoNF = tipoTituloRepository.findByTipo("NF")
+                .orElseGet(() -> criarTipoTituloNF());
+
+        // Criar borderô
         Bordero bordero = Bordero.builder()
                 .dataGeracao(LocalDateTime.now())
-                .cnpjCedente(extrairCnpj(nfeData))
-                .nomeCedente(extrairRazaoSocial(nfeData))
+                .cnpjCliente(cnpjCliente)
                 .cnpjFundo("09609468000152")
                 .nomeFundo("F.I.D.C. MACRO FUND")
                 .status(StatusBordero.GERADO)
                 .build();
 
-        // Buscar duplicatas
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> duplicatas =
-                (List<Map<String, Object>>) nfeData.get("duplicatas");
-
-        if (duplicatas == null || duplicatas.isEmpty()) {
-            throw new IllegalArgumentException("NFe não possui duplicatas para gerar borderô");
-        }
-
-        // Controle de duplicatas já processadas
-        Set<String> numerosProcessados = new LinkedHashSet<>();
-
+        // Variáveis para totalização
         BigDecimal valorTotalBruto = BigDecimal.ZERO;
         BigDecimal valorTotalDesagio = BigDecimal.ZERO;
         BigDecimal valorTotalLiquido = BigDecimal.ZERO;
@@ -83,113 +76,143 @@ public class BorderoGeneratorService {
         int somaDiasUteis = 0;
         LocalDateTime menorVenc = null;
         LocalDateTime maiorVenc = null;
+        Set<String> sacadosUnicos = new HashSet<>();
 
-        LocalDate dataHoje = LocalDate.now();
+        // Processar cada NFe
+        for (Long nfeId : nfeIds) {
+            Map<String, Object> nfeData = nfeClientService.buscarNFe(nfeId);
 
-        for (Map<String, Object> dup : duplicatas) {
-            String numeroDuplicata = dup.get("numero").toString();
+            // Atualizar dados do cedente (primeira NFe define)
+            if (bordero.getCnpjCedente() == null) {
+                bordero.setCnpjCedente(extrairCnpj(nfeData));
+                bordero.setNomeCedente(extrairRazaoSocial(nfeData));
+            }
 
-            // ========== CORREÇÃO 1: Evitar duplicatas ==========
-            if (numerosProcessados.contains(numeroDuplicata)) {
-                log.warn("Duplicata {} já foi processada, ignorando", numeroDuplicata);
+            // Processar duplicatas desta NFe
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> duplicatas =
+                    (List<Map<String, Object>>) nfeData.get("duplicatas");
+
+            if (duplicatas == null || duplicatas.isEmpty()) {
+                log.warn("NFe ID {} não possui duplicatas, pulando", nfeId);
                 continue;
             }
-            numerosProcessados.add(numeroDuplicata);
 
-            String vencimentoStr = dup.get("vencimento").toString();
-            LocalDateTime vencimento = LocalDateTime.parse(vencimentoStr);
+            LocalDate dataHoje = LocalDate.now();
 
-            // ========== CORREÇÃO 2: Garantir valor sempre positivo ==========
-            BigDecimal valorOriginal = new BigDecimal(dup.get("valor").toString());
-            BigDecimal valor = valorOriginal.abs(); // Sempre positivo
+            for (Map<String, Object> dup : duplicatas) {
+                String numeroDuplicata = dup.get("numero").toString();
+                String vencimentoStr = dup.get("vencimento").toString();
+                LocalDateTime vencimento = LocalDateTime.parse(vencimentoStr);
 
-            if (valorOriginal.compareTo(BigDecimal.ZERO) < 0) {
-                log.warn("Valor negativo detectado na duplicata {}: {} - convertido para positivo",
-                        numeroDuplicata, valorOriginal);
+                BigDecimal valorOriginal = new BigDecimal(dup.get("valor").toString());
+                BigDecimal valor = valorOriginal.abs();
+
+                if (valorOriginal.compareTo(BigDecimal.ZERO) < 0) {
+                    log.warn("Valor negativo detectado na duplicata {}: {} - convertido para positivo",
+                            numeroDuplicata, valorOriginal);
+                }
+
+                Long duplicataId = Long.valueOf(dup.get("id") != null ? dup.get("id").toString() : "0");
+
+                // Calcular float (D+) considerando fins de semana e feriados
+                LocalDate dataVencimento = vencimento.toLocalDate();
+                LocalDate dataCompensacao = diaUtilService.calcularProximoDiaUtil(
+                        dataVencimento, FLOAT_BASE, "SP", null
+                );
+
+                // Calcular D+ (float)
+                int floatDias = (int) ChronoUnit.DAYS.between(dataVencimento, dataCompensacao);
+
+                // Dias corridos até a data de compensação
+                int diasCorridos = (int) ChronoUnit.DAYS.between(dataHoje, dataCompensacao);
+
+                if (diasCorridos < 0) {
+                    diasCorridos = 0;
+                    log.warn("Duplicata {} já vencida. Dias corridos ajustado para 0", numeroDuplicata);
+                }
+
+                // Dias úteis
+                int diasUteis = diaUtilService.calcularDiasUteis(dataHoje, dataCompensacao, "SP", null);
+
+                // Calcular deságio usando FATOR
+                // Fórmula: Deságio = VLR_BRUTO × ((FATOR / DIAS_VCTO) × (DIAS_VCTO + D+))
+                BigDecimal fator = new BigDecimal("0.0175"); // 1.75% a.m.
+                BigDecimal desagio = BigDecimal.ZERO;
+
+                if (diasCorridos > 0) {
+                    BigDecimal diasVcto = new BigDecimal(diasCorridos);
+                    BigDecimal diasFloat = new BigDecimal(floatDias);
+                    BigDecimal diasTotal = diasVcto.add(diasFloat);
+
+                    // (FATOR / diasCorridos) * diasTotal
+                    BigDecimal taxaDiaria = fator.divide(diasVcto, 10, RoundingMode.HALF_UP);
+                    desagio = valor
+                            .multiply(taxaDiaria)
+                            .multiply(diasTotal)
+                            .setScale(2, RoundingMode.HALF_UP);
+                }
+
+                if (desagio.compareTo(BigDecimal.ZERO) < 0) {
+                    desagio = BigDecimal.ZERO;
+                }
+
+                // Valor líquido inicial (sem tarifas)
+                BigDecimal valorLiquido = valor.subtract(desagio);
+
+                if (valorLiquido.compareTo(BigDecimal.ZERO) < 0) {
+                    log.error("Valor líquido negativo detectado! Valor: {}, Deságio: {}",
+                            valor, desagio);
+                    valorLiquido = BigDecimal.ZERO;
+                }
+
+                String cnpjSacado = extrairDadoDeLista(nfeData, "destinatario", "cnpj");
+                String nomeSacado = extrairDadoDeLista(nfeData, "destinatario", "razaoSocial");
+
+                // Adicionar à lista de sacados únicos
+                sacadosUnicos.add(cnpjSacado);
+
+                TituloBordero titulo = TituloBordero.builder()
+                        .tipoTitulo(tipoNF)
+                        .nfeId(nfeId)
+                        .duplicataId(duplicataId)
+                        .chaveAcessoNFe(nfeData.get("chaveAcesso").toString())
+                        .numeroNFe(nfeData.get("numeroNfe").toString())
+                        .numeroDuplicata(numeroDuplicata)
+                        .dataVencimento(vencimento)
+                        .valorBruto(valor)
+                        .diasParaVencimento(diasCorridos)
+                        .diasUteis(diasUteis)
+                        .prazoAdicional(0) // PZ sempre 0 por enquanto
+                        .floatDias(floatDias) // D+
+                        .dataCompensacao(dataCompensacao)
+                        .taxaDesagio(fator.multiply(new BigDecimal("100"))) // Percentual
+                        .valorDesagio(desagio)
+                        .valorLiquido(valorLiquido)
+                        .cnpjSacado(cnpjSacado)
+                        .nomeSacado(nomeSacado)
+                        .cnpjEmitente(extrairCnpj(nfeData))
+                        .nomeEmitente(extrairRazaoSocial(nfeData))
+                        .build();
+
+                bordero.addTitulo(titulo);
+
+                valorTotalBruto = valorTotalBruto.add(valor);
+                valorTotalDesagio = valorTotalDesagio.add(desagio);
+                valorTotalLiquido = valorTotalLiquido.add(valorLiquido);
+                somaDiasCorridos += diasCorridos;
+                somaDiasUteis += diasUteis;
+
+                if (menorVenc == null || vencimento.isBefore(menorVenc)) {
+                    menorVenc = vencimento;
+                }
+                if (maiorVenc == null || vencimento.isAfter(maiorVenc)) {
+                    maiorVenc = vencimento;
+                }
+
+                log.debug("Título processado: {} - Valor Bruto: {} - Deságio: {} - Líquido: {} - D+: {}",
+                        numeroDuplicata, valor, desagio, valorLiquido, floatDias);
             }
-
-            Long duplicataId = Long.valueOf(dup.get("id") != null ? dup.get("id").toString() : "0");
-
-            // Calcular float (D+) considerando fins de semana e feriados
-            LocalDate dataVencimento = vencimento.toLocalDate();
-            LocalDate dataCompensacao = diaUtilService.calcularProximoDiaUtil(
-                    dataVencimento, FLOAT_BASE, "SP", null
-            );
-
-            // Dias corridos até a data de compensação
-            int diasCorridos = (int) ChronoUnit.DAYS.between(dataHoje, dataCompensacao);
-
-            // Garantir que dias corridos não seja negativo
-            if (diasCorridos < 0) {
-                diasCorridos = 0;
-                log.warn("Duplicata {} já vencida. Dias corridos ajustado para 0", numeroDuplicata);
-            }
-
-            // Dias úteis (para informação)
-            int diasUteis = diaUtilService.calcularDiasUteis(dataHoje, dataCompensacao, "SP", null);
-
-            // Calcular taxa de deságio (mensal)
-            // Exemplo: 1.5% ao mês = 0.05% ao dia
-            BigDecimal taxaMensal = new BigDecimal("1.50"); // 1.5% a.m.
-            BigDecimal taxaDiaria = taxaMensal.divide(new BigDecimal("30"), 6, RoundingMode.HALF_UP);
-
-            // Deságio = Valor * Taxa Diária * Dias Corridos / 100
-            BigDecimal desagio = valor
-                    .multiply(taxaDiaria)
-                    .multiply(new BigDecimal(diasCorridos))
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-
-            // ========== CORREÇÃO 3: Garantir deságio não negativo ==========
-            if (desagio.compareTo(BigDecimal.ZERO) < 0) {
-                desagio = BigDecimal.ZERO;
-                log.warn("Deságio negativo detectado, ajustado para zero");
-            }
-
-            // Valor líquido = Valor bruto - Deságio
-            BigDecimal valorLiquido = valor.subtract(desagio);
-
-            // ========== CORREÇÃO 4: Garantir valor líquido não negativo ==========
-            if (valorLiquido.compareTo(BigDecimal.ZERO) < 0) {
-                log.error("Valor líquido negativo detectado! Valor: {}, Deságio: {}",
-                        valor, desagio);
-                valorLiquido = BigDecimal.ZERO;
-            }
-
-            TituloBordero titulo = TituloBordero.builder()
-                    .nfeId(nfeId)
-                    .duplicataId(duplicataId)
-                    .chaveAcessoNFe(nfeData.get("chaveAcesso").toString())
-                    .numeroNFe(nfeData.get("numeroNfe").toString())
-                    .numeroDuplicata(numeroDuplicata)
-                    .dataVencimento(vencimento)
-                    .valorBruto(valor) // Sempre positivo
-                    .diasParaVencimento(diasCorridos)
-                    .diasUteis(diasUteis)
-                    .dataCompensacao(dataCompensacao)
-                    .taxaDesagio(taxaMensal)
-                    .valorDesagio(desagio) // Sempre positivo ou zero
-                    .valorLiquido(valorLiquido) // Sempre positivo ou zero
-                    .cnpjSacado(extrairDadoDeLista(nfeData,"destinatario", "cnpj"))
-                    .nomeSacado(extrairDadoDeLista(nfeData,"destinatario", "razaoSocial"))
-                    .build();
-
-            bordero.addTitulo(titulo);
-
-            valorTotalBruto = valorTotalBruto.add(valor);
-            valorTotalDesagio = valorTotalDesagio.add(desagio);
-            valorTotalLiquido = valorTotalLiquido.add(valorLiquido);
-            somaDiasCorridos += diasCorridos;
-            somaDiasUteis += diasUteis;
-
-            if (menorVenc == null || vencimento.isBefore(menorVenc)) {
-                menorVenc = vencimento;
-            }
-            if (maiorVenc == null || vencimento.isAfter(maiorVenc)) {
-                maiorVenc = vencimento;
-            }
-
-            log.debug("Título processado: {} - Valor Bruto: {} - Deságio: {} - Líquido: {}",
-                    numeroDuplicata, valor, desagio, valorLiquido);
         }
 
         int quantidadeTitulosProcessados = bordero.getTitulos().size();
@@ -199,12 +222,16 @@ public class BorderoGeneratorService {
         }
 
         // Calcular tarifas
+        // Taxa Serasa: R$ 50,00 por sacado único
+        int quantidadeSacados = sacadosUnicos.size();
+        boolean incluirSerasa = quantidadeSacados > 0;
+
         CalculoTarifasResult tarifas = tarifaService.calcularTarifas(
                 quantidadeTitulosProcessados,
-                true // Incluir consulta Serasa
+                incluirSerasa
         );
 
-        // Aplicar tarifas por documento (subtrair do líquido de cada título)
+        // Aplicar tarifas por documento
         BigDecimal tarifaPorTitulo = tarifas.getTarifasPorDocumento()
                 .divide(new BigDecimal(quantidadeTitulosProcessados), 2, RoundingMode.HALF_UP);
 
@@ -212,7 +239,6 @@ public class BorderoGeneratorService {
             BigDecimal liquidoAtual = titulo.getValorLiquido();
             BigDecimal novoLiquido = liquidoAtual.subtract(tarifaPorTitulo);
 
-            // Garantir que não fique negativo após tarifa
             if (novoLiquido.compareTo(BigDecimal.ZERO) < 0) {
                 log.warn("Valor líquido do título {} ficaria negativo após tarifa. Ajustando para zero",
                         titulo.getNumeroDuplicata());
@@ -223,18 +249,16 @@ public class BorderoGeneratorService {
             titulo.setTarifaDocumento(tarifaPorTitulo);
         }
 
-        // Recalcular líquido total após tarifas por documento
+        // Recalcular líquido total após tarifas
         valorTotalLiquido = valorTotalLiquido.subtract(tarifas.getTarifasPorDocumento());
 
-        // Aplicar tarifas de cliente e gerais no total
+        // Aplicar tarifas de cliente e gerais
         BigDecimal valorFinal = valorTotalLiquido
                 .subtract(tarifas.getTarifasPorCliente())
                 .subtract(tarifas.getTarifasGerais());
 
-        // Garantir que valor final não seja negativo
         if (valorFinal.compareTo(BigDecimal.ZERO) < 0) {
-            log.error("Valor final do borderô ficaria negativo! Ajustando para zero. " +
-                    "Verifique as tarifas configuradas.");
+            log.error("Valor final do borderô ficaria negativo! Ajustando para zero.");
             valorFinal = BigDecimal.ZERO;
         }
 
@@ -246,6 +270,7 @@ public class BorderoGeneratorService {
         bordero.setValorLiquido(valorFinal);
 
         bordero.setQuantidadeTitulos(quantidadeTitulosProcessados);
+        bordero.setQuantidadeSacados(quantidadeSacados);
         bordero.setPrazoMedio(somaDiasCorridos / quantidadeTitulosProcessados);
         bordero.setPrazoMedioDiasUteis(somaDiasUteis / quantidadeTitulosProcessados);
         bordero.setVencimentoMenor(menorVenc);
@@ -253,205 +278,98 @@ public class BorderoGeneratorService {
 
         Bordero borderoSalvo = repository.save(bordero);
 
-        log.info("Borderô gerado com sucesso: {} | Títulos: {} | Valor Bruto: R$ {} | Valor Líquido: R$ {}",
+        log.info("Borderô gerado com sucesso: {} | NFes: {} | Títulos: {} | Sacados: {} | Valor Bruto: R$ {} | Valor Líquido: R$ {}",
                 borderoSalvo.getNumeroBordero(),
+                nfeIds.size(),
                 borderoSalvo.getQuantidadeTitulos(),
+                quantidadeSacados,
                 borderoSalvo.getValorBruto(),
                 borderoSalvo.getValorLiquido());
 
         return borderoSalvo;
     }
 
-    public byte[] gerarPDFBordero(Long borderoId) {
-        Bordero bordero = repository.findById(borderoId)
-                .orElseThrow(() -> new RuntimeException("Borderô não encontrado"));
-
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Document document = new Document(PageSize.A4);
-            PdfWriter.getInstance(document, out);
-            document.open();
-
-            // Fontes
-            Font fontTitulo = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18);
-            Font fontSubtitulo = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12);
-            Font fontNormal = FontFactory.getFont(FontFactory.HELVETICA, 10);
-            Font fontCabecalhoTabela = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE);
-
-            // Formatadores
-            NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
-            DateTimeFormatter dataFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
-            // 1. Título
-            Paragraph titulo = new Paragraph("BORDERÔ DE DESCONTO DE RECEBÍVEIS", fontTitulo);
-            titulo.setAlignment(Element.ALIGN_CENTER);
-            titulo.setSpacingAfter(20);
-            document.add(titulo);
-
-            // 2. Dados do Cedente e Fundo
-            PdfPTable dadosTable = new PdfPTable(2);
-            dadosTable.setWidthPercentage(100);
-            dadosTable.setSpacingAfter(20);
-
-            dadosTable.addCell(getCell("CEDENTE:", fontSubtitulo));
-            dadosTable.addCell(getCell("FUNDO (Cessionário):", fontSubtitulo));
-            dadosTable.addCell(getCell(bordero.getNomeCedente() + "\nCNPJ: " + bordero.getCnpjCedente(), fontNormal));
-            dadosTable.addCell(getCell(bordero.getNomeFundo() + "\nCNPJ: " + bordero.getCnpjFundo(), fontNormal));
-
-            document.add(dadosTable);
-
-            // 3. Resumo Financeiro (Box)
-            PdfPTable resumoTable = new PdfPTable(4);
-            resumoTable.setWidthPercentage(100);
-            resumoTable.setSpacingAfter(20);
-
-            // Cabeçalhos do Resumo
-            addHeaderCell(resumoTable, "Valor Bruto", fontCabecalhoTabela);
-            addHeaderCell(resumoTable, "Deságio Total", fontCabecalhoTabela);
-            addHeaderCell(resumoTable, "Tarifas", fontCabecalhoTabela);
-            addHeaderCell(resumoTable, "VALOR LÍQUIDO", fontCabecalhoTabela);
-
-            // Valores do Resumo
-            resumoTable.addCell(getCell(currencyFormat.format(bordero.getValorBruto()), fontNormal));
-            resumoTable.addCell(getCell(currencyFormat.format(bordero.getValorDesagio()), fontNormal));
-            resumoTable.addCell(getCell(currencyFormat.format(bordero.getValorTarifas()), fontNormal));
-
-            // Destaque para o valor líquido
-            Font fontLiquido = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
-            resumoTable.addCell(getCell(currencyFormat.format(bordero.getValorLiquido()), fontLiquido));
-
-            document.add(resumoTable);
-
-            document.add(new Paragraph("Número do Borderô: " + bordero.getNumeroBordero(), fontNormal));
-            document.add(new Paragraph("Data de Geração: " + bordero.getDataGeracao().format(dataFormatter), fontNormal));
-            document.add(new Paragraph(" ", fontNormal)); // Espaço
-
-            // 4. Lista de Títulos (Tabela Detalhada)
-            document.add(new Paragraph("DETALHAMENTO DOS TÍTULOS", fontSubtitulo));
-            document.add(new Paragraph(" ", fontNormal));
-
-            PdfPTable titulosTable = new PdfPTable(6); // 6 Colunas
-            titulosTable.setWidthPercentage(100);
-            titulosTable.setWidths(new float[]{2, 2, 2, 2, 1, 2}); // Largura relativa das colunas
-
-            addHeaderCell(titulosTable, "NF-e / Duplicata", fontCabecalhoTabela);
-            addHeaderCell(titulosTable, "Sacado", fontCabecalhoTabela);
-            addHeaderCell(titulosTable, "Vencimento", fontCabecalhoTabela);
-            addHeaderCell(titulosTable, "Valor Bruto", fontCabecalhoTabela);
-            addHeaderCell(titulosTable, "Dias", fontCabecalhoTabela);
-            addHeaderCell(titulosTable, "Valor Líquido", fontCabecalhoTabela);
-
-            for (TituloBordero tituloBord : bordero.getTitulos()) {
-                titulosTable.addCell(getCell(tituloBord.getNumeroNFe() + " / " + tituloBord.getNumeroDuplicata(), fontNormal));
-                titulosTable.addCell(getCell(tituloBord.getNomeSacado(), fontNormal));
-                titulosTable.addCell(getCell(tituloBord.getDataVencimento().format(dataFormatter), fontNormal));
-                titulosTable.addCell(getCell(currencyFormat.format(tituloBord.getValorBruto()), fontNormal));
-                titulosTable.addCell(getCell(String.valueOf(tituloBord.getDiasParaVencimento()), fontNormal));
-                titulosTable.addCell(getCell(currencyFormat.format(tituloBord.getValorLiquido()), fontNormal));
-            }
-
-            document.add(titulosTable);
-
-            document.close();
-            return out.toByteArray();
-
-        } catch (Exception e) {
-            log.error("Erro ao gerar PDF", e);
-            throw new RuntimeException("Erro ao gerar PDF do borderô", e);
-        }
-    }
-
-    // Métodos auxiliares para formatar tabelas
-    private PdfPCell getCell(String text, Font font) {
-        PdfPCell cell = new PdfPCell(new Phrase(text, font));
-        cell.setPadding(5);
-        cell.setBorderColor(Color.GRAY);
-        return cell;
-    }
-
-    private void addHeaderCell(PdfPTable table, String text, Font font) {
-        PdfPCell cell = new PdfPCell(new Phrase(text, font));
-        cell.setBackgroundColor(Color.DARK_GRAY);
-        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        cell.setPadding(5);
-        table.addCell(cell);
+    /**
+     * Método original mantido para compatibilidade com Kafka
+     */
+    @Transactional
+    public Bordero gerarBorderoAutomatico(Long nfeId) {
+        // Chama o novo método com apenas uma NFe
+        return gerarBorderoComMultiplasNFes(null, List.of(nfeId));
     }
 
     /**
-     * Método utilitário para extrair o CNPJ do Emitente de forma segura.
+     * Busca borderô por ID
      */
+    public Bordero buscarPorId(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Borderô não encontrado"));
+    }
+
+    /**
+     * Lista borderôs por status
+     */
+    public List<Bordero> listarPorStatus(String status) {
+        if (status == null || status.isEmpty()) {
+            return repository.findAll();
+        }
+        // Implementar filtro por status no repository se necessário
+        return repository.findAll().stream()
+                .filter(b -> b.getStatus().name().equals(status))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Gera PDF do borderô
+     */
+    public byte[] gerarPDFBordero(Long borderoId) {
+        Bordero bordero = buscarPorId(borderoId);
+        return pdfBorderoService.gerarPDF(bordero);
+    }
+
+    /**
+     * Cria tipo de título NF se não existir
+     */
+    private TipoTitulo criarTipoTituloNF() {
+        TipoTitulo tipoNF = TipoTitulo.builder()
+                .tipo("NF")
+                .nome("Nota Fiscal")
+                .descricao("Título existente em uma nota fiscal")
+                .ativo(true)
+                .build();
+        return tipoTituloRepository.save(tipoNF);
+    }
+
+    // Métodos auxiliares mantidos
     private String extrairCnpj(Map<String, Object> nfeData) {
         return extrairDadoDoEmitente(nfeData, "cnpj");
     }
 
-    /**
-     * Método utilitário para extrair a Razão Social do Emitente de forma segura.
-     */
     private String extrairRazaoSocial(Map<String, Object> nfeData) {
         return extrairDadoDoEmitente(nfeData, "razaoSocial");
     }
 
-    /**
-     * Lógica comum para navegar no mapa "emitente" e buscar uma chave específica.
-     */
     @SuppressWarnings("unchecked")
     private String extrairDadoDoEmitente(Map<String, Object> nfeData, String chaveBusca) {
         if (nfeData == null) return null;
-
-        // 1. Obtém o objeto 'emitente'
         Object emitenteObj = nfeData.get("emitente");
-
-        // 2. Verifica se ele é realmente um Mapa antes de tentar acessar
         if (emitenteObj instanceof Map) {
             Map<String, Object> emitenteMap = (Map<String, Object>) emitenteObj;
-
-            // 3. Busca o valor (cnpj ou razaoSocial)
             Object valor = emitenteMap.get(chaveBusca);
-
-            // 4. Retorna como String ou null se não existir
             return valor != null ? valor.toString() : null;
         }
-
         return null;
     }
 
-    /**
-     * Lógica comum para navegar no mapa "destinatario" e buscar uma chave específica.
-     */
     @SuppressWarnings("unchecked")
     private String extrairDadoDeLista(Map<String, Object> nfeData, String nomeLista, String chaveBusca) {
         if (nfeData == null) return null;
-
-        // 1. Obtém o objeto da lista (ex: 'destinatario')
         Object listaObj = nfeData.get(nomeLista);
-
-        // 2. Verifica se ele é realmente um Mapa antes de tentar acessar
         if (listaObj instanceof Map) {
             Map<String, Object> listaMap = (Map<String, Object>) listaObj;
-
-            // 3. Busca o valor (cnpj ou razaoSocial)
             Object valor = listaMap.get(chaveBusca);
-
-            // 4. Retorna como String ou null se não existir
             return valor != null ? valor.toString() : null;
         }
-
         return null;
     }
-
-    private void descontarLimiteCliente(String cnpj, BigDecimal valor) {
-        try {
-            clientServiceClient.descontarLimite(cnpj, valor);
-            log.info("Limite descontado com sucesso para cliente {}: R$ {}", cnpj, valor);
-        } catch (FeignException.BadRequest e) {
-            log.error("Erro ao descontar limite - Cliente sem limite suficiente: {}", cnpj);
-            throw new IllegalStateException("Cliente não possui limite suficiente", e);
-        } catch (FeignException.NotFound e) {
-            log.error("Cliente não encontrado: {}", cnpj);
-            throw new IllegalStateException("Cliente não encontrado", e);
-        } catch (FeignException e) {
-            log.error("Erro ao comunicar com client-service", e);
-            throw new IllegalStateException("Erro ao descontar limite do cliente", e);
-        }
-    }
-
 }

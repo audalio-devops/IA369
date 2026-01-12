@@ -5,14 +5,13 @@ spring:
   application:
     name: bordero-generator-service
 
-  # ? ADICIONAR ESTA SEÇÃO
   security:
     enabled: false
 
   datasource:
     url: jdbc:postgresql://localhost:5432/bordero_db
-    username: postgres
-    password: postgres
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -26,6 +25,14 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+
+  # IMPORTANTE: Configurar ordem de execução do SQL
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
+      # Executar data.sql DEPOIS do Hibernate criar as tabelas
+      # Se usar ddl-auto: update, o Hibernate cria as tabelas primeiro
 
   kafka:
     bootstrap-servers: localhost:9092
