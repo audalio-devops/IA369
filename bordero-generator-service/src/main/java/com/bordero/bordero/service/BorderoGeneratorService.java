@@ -4,10 +4,10 @@ import com.bordero.bordero.client.ClientServiceClient;
 import com.bordero.bordero.domain.model.*;
 import com.bordero.bordero.repository.BorderoRepository;
 import com.bordero.bordero.repository.TipoTituloRepository;
-import feign.FeignException;
+//import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
+//import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
@@ -33,15 +33,20 @@ public class BorderoGeneratorService {
 
     private static final int FLOAT_BASE = 2; // D+2 padrão
 
-    @KafkaListener(topics = "nfe-events", groupId = "bordero-generator")
-    public void processarEventoNFe(Map<String, Object> evento) {
-        String tipo = (String) evento.get("tipo");
+    /**
+     * DESABILITADO: Geração automática via Kafka
+     * Agora os borderôs são gerados APENAS via endpoint REST
+     */
+    // @KafkaListener(topics = "nfe-events", groupId = "bordero-generator")
+    // public void processarEventoNFe(Map<String, Object> evento) {
+    //     String tipo = (String) evento.get("tipo");
+    //     if ("NFE_PROCESSADA".equals(tipo)) {
+    //         Long nfeId = ((Number) evento.get("nfeId")).longValue();
+    //         log.info("NFe {} processada. Borderô será gerado via endpoint REST", nfeId);
+    //         // NÃO gera borderô automaticamente
+    //     }
+    // }
 
-        if ("NFE_PROCESSADA".equals(tipo)) {
-            Long nfeId = ((Number) evento.get("nfeId")).longValue();
-            gerarBorderoAutomatico(nfeId);
-        }
-    }
 
     /**
      * NOVO MÉTODO: Gera borderô com múltiplas NFes

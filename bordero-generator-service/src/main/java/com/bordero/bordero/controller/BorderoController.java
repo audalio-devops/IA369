@@ -21,10 +21,17 @@ import java.util.Map;
 
 /**
  * Controller para gerenciamento de Borderôs
- * VERSÃO COM VALIDAÇÕES ROBUSTAS
+ *
+ * PATHS LIMPOS E SEMÂNTICOS
+ *
+ * Via Gateway: http://gateway:8080/api/bordero/...
+ * - Gateway remove /api (StripPrefix=1)
+ * - Chega aqui como: /bordero/...
+ *
+ * Direto (dev): http://localhost:8081/bordero/...
  */
 @RestController
-@RequestMapping("/api/borderos")
+@RequestMapping("/bordero")  // Path limpo, sem redundância
 @RequiredArgsConstructor
 @Slf4j
 @Validated
@@ -34,14 +41,10 @@ public class BorderoController {
     private final BorderoMapper borderoMapper;
 
     /**
-     * POST /api/borderos/gerar
-     * Gera um borderô com múltiplas NFes
+     * POST /bordero/gerar
+     * Via Gateway: POST /api/bordero/gerar
      *
-     * Body exemplo:
-     * {
-     *   "cnpjCliente": "12345678000190",
-     *   "nfeIds": [1, 2, 3]
-     * }
+     * Gera um borderô com múltiplas NFes
      */
     @PostMapping("/gerar")
     public ResponseEntity<?> gerarBordero(@Valid @RequestBody GerarBorderoRequest request) {
@@ -76,7 +79,9 @@ public class BorderoController {
     }
 
     /**
-     * GET /api/borderos/{id}
+     * GET /bordero/{id}
+     * Via Gateway: GET /api/bordero/{id}
+     *
      * Busca borderô por ID
      */
     @GetMapping("/{id}")
@@ -102,9 +107,10 @@ public class BorderoController {
     }
 
     /**
-     * GET /api/borderos
+     * GET /bordero
+     * Via Gateway: GET /api/bordero?status=GERADO
+     *
      * Lista borderôs (opcionalmente filtrado por status)
-     * Query params: ?status=GERADO
      */
     @GetMapping
     public ResponseEntity<?> listar(
@@ -125,7 +131,9 @@ public class BorderoController {
     }
 
     /**
-     * GET /api/borderos/{id}/pdf
+     * GET /bordero/{id}/pdf
+     * Via Gateway: GET /api/bordero/{id}/pdf
+     *
      * Gera e retorna o PDF do borderô
      */
     @GetMapping("/{id}/pdf")
@@ -158,7 +166,9 @@ public class BorderoController {
     }
 
     /**
-     * GET /api/borderos/{id}/titulos
+     * GET /bordero/{id}/titulos
+     * Via Gateway: GET /api/bordero/{id}/titulos
+     *
      * Busca apenas os títulos de um borderô específico
      */
     @GetMapping("/{id}/titulos")
@@ -183,8 +193,10 @@ public class BorderoController {
     }
 
     /**
-     * DELETE /api/borderos/{id}
-     * Exclui um borderô (lógica de exclusão pode ser implementada)
+     * DELETE /bordero/{id}
+     * Via Gateway: DELETE /api/bordero/{id}
+     *
+     * Exclui um borderô
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> excluir(@PathVariable Long id) {

@@ -387,342 +387,355 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 Upload de Notas Fiscais Eletrônicas</h1>
-        <p class="subtitle">Sistema de Processamento em Lote de NFe-XML</p>
+<div class="container">
+    <h1>📊 Upload de Notas Fiscais Eletrônicas</h1>
+    <p class="subtitle">Sistema de Processamento em Lote de NFe-XML</p>
 
-        <!-- Campo CNPJ do Cliente -->
-        <div class="form-group">
-            <label for="cnpjCliente">CNPJ do Cliente (Cedente) *</label>
-            <input 
-                type="text" 
-                id="cnpjCliente" 
+    <!-- Campo CNPJ do Cliente -->
+    <div class="form-group">
+        <label for="cnpjCliente">CNPJ do Cliente (Cedente) *</label>
+        <input
+                type="text"
+                id="cnpjCliente"
                 placeholder="Digite o CNPJ (apenas números - 14 dígitos)"
                 maxlength="14"
                 pattern="[0-9]{14}"
-            >
-            <small style="color: #666; display: block; margin-top: 5px;">
-                Exemplo: 12345678000195
-            </small>
-        </div>
-
-        <!-- Área de Upload -->
-        <div class="upload-area" id="uploadArea">
-            <div class="upload-icon">📄</div>
-            <div class="upload-text">Clique aqui ou arraste os arquivos XML</div>
-            <div class="upload-hint">Suporte para múltiplos arquivos simultaneamente</div>
-            <input type="file" id="fileInput" multiple accept=".xml">
-        </div>
-
-        <!-- Lista de Arquivos -->
-        <div id="fileListContainer" style="display: none;">
-            <div class="file-list-header">
-                📋 Arquivos Selecionados (<span id="fileCount">0</span>)
-            </div>
-            <div class="file-list" id="fileList"></div>
-        </div>
-
-        <!-- Barra de Progresso -->
-        <div class="progress-bar" id="progressBar">
-            <div class="progress-fill" id="progressFill">0%</div>
-        </div>
-
-        <!-- Botões de Ação -->
-        <div class="action-buttons">
-            <button class="btn btn-secondary" id="clearBtn" onclick="limparArquivos()">
-                🗑️ Limpar Tudo
-            </button>
-            <button class="btn btn-primary" id="uploadBtn" onclick="processarArquivos()" disabled>
-                ⬆️ Processar NFes e Gerar Borderô
-            </button>
-        </div>
-
-        <!-- Resultados -->
-        <div class="results" id="results">
-            <h2>📈 Resultados do Processamento</h2>
-            <div class="summary" id="summary"></div>
-            <div id="resultsList"></div>
-        </div>
+        >
+        <small style="color: #666; display: block; margin-top: 5px;">
+            Exemplo: 12345678000195
+        </small>
     </div>
 
-    <script>
-        let arquivosSelecionados = [];
-        
-        // CORRIGIDO: Porta 8081 (nfe-processor) para processar NFes
-        // Porta 8082 (bordero-generator) para gerar borderô
-        const NFE_API_URL = 'http://localhost:8081';
-        const BORDERO_API_URL = 'http://localhost:8082';
+    <!-- Área de Upload -->
+    <div class="upload-area" id="uploadArea">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">Clique aqui ou arraste os arquivos XML</div>
+        <div class="upload-hint">Suporte para múltiplos arquivos simultaneamente</div>
+        <input type="file" id="fileInput" multiple accept=".xml">
+    </div>
 
-        // Elementos DOM
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        const fileList = document.getElementById('fileList');
-        const fileListContainer = document.getElementById('fileListContainer');
-        const fileCount = document.getElementById('fileCount');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const cnpjInput = document.getElementById('cnpjCliente');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        const results = document.getElementById('results');
+    <!-- Lista de Arquivos -->
+    <div id="fileListContainer" style="display: none;">
+        <div class="file-list-header">
+            📋 Arquivos Selecionados (<span id="fileCount">0</span>)
+        </div>
+        <div class="file-list" id="fileList"></div>
+    </div>
 
-        // Click para selecionar arquivos
-        uploadArea.addEventListener('click', () => fileInput.click());
+    <!-- Barra de Progresso -->
+    <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill">0%</div>
+    </div>
 
-        // Seleção de arquivos
-        fileInput.addEventListener('change', (e) => {
-            adicionarArquivos(Array.from(e.target.files));
-            fileInput.value = '';
+    <!-- Botões de Ação -->
+    <div class="action-buttons">
+        <button class="btn btn-secondary" id="clearBtn" onclick="limparArquivos()">
+            🗑️ Limpar Tudo
+        </button>
+        <button class="btn btn-primary" id="uploadBtn" onclick="processarArquivos()" disabled>
+            ⬆️ Processar NFes e Gerar Borderô
+        </button>
+    </div>
+
+    <!-- Resultados -->
+    <div class="results" id="results">
+        <h2>📈 Resultados do Processamento</h2>
+        <div class="summary" id="summary"></div>
+        <div id="resultsList"></div>
+    </div>
+</div>
+
+<script>
+    let arquivosSelecionados = [];
+
+    // CORRIGIDO: Usar API Gateway (porta 8080)
+    const API_BASE_URL = 'http://localhost:8080';
+    const NFE_API_URL = `${API_BASE_URL}/api/nfe`;
+    const BORDERO_API_URL = `${API_BASE_URL}/api/bordero`;
+
+    // Elementos DOM
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const fileListContainer = document.getElementById('fileListContainer');
+    const fileCount = document.getElementById('fileCount');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const cnpjInput = document.getElementById('cnpjCliente');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const results = document.getElementById('results');
+
+    // Click para selecionar arquivos
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    // Seleção de arquivos
+    fileInput.addEventListener('change', (e) => {
+        adicionarArquivos(Array.from(e.target.files));
+        fileInput.value = '';
+    });
+
+    // Drag and drop
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        adicionarArquivos(Array.from(e.dataTransfer.files));
+    });
+
+    // Validar CNPJ enquanto digita
+    cnpjInput.addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/\D/g, '');
+        validarFormulario();
+    });
+
+    function adicionarArquivos(novosArquivos) {
+        const xmls = novosArquivos.filter(f => f.name.toLowerCase().endsWith('.xml'));
+
+        if (xmls.length === 0) {
+            alert('⚠️ Por favor, selecione apenas arquivos XML');
+            return;
+        }
+
+        if (novosArquivos.length > xmls.length) {
+            alert(`⚠️ ${novosArquivos.length - xmls.length} arquivo(s) ignorado(s) (não são XML)`);
+        }
+
+        xmls.forEach(arquivo => {
+            if (!arquivosSelecionados.find(a => a.name === arquivo.name)) {
+                arquivosSelecionados.push(arquivo);
+            }
         });
 
-        // Drag and drop
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
+        atualizarListaArquivos();
+    }
 
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
+    function atualizarListaArquivos() {
+        fileList.innerHTML = '';
 
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            adicionarArquivos(Array.from(e.dataTransfer.files));
-        });
-
-        // Validar CNPJ enquanto digita
-        cnpjInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/\D/g, '');
+        if (arquivosSelecionados.length === 0) {
+            fileListContainer.style.display = 'none';
             validarFormulario();
+            return;
+        }
+
+        fileListContainer.style.display = 'block';
+        fileCount.textContent = arquivosSelecionados.length;
+
+        arquivosSelecionados.forEach((arquivo, index) => {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <div class="file-info">
+                    <div class="file-icon">📄</div>
+                    <div class="file-details">
+                        <h4>${arquivo.name}</h4>
+                        <p>${formatarTamanho(arquivo.size)}</p>
+                    </div>
+                </div>
+                <span class="file-status status-pending">Aguardando</span>
+                <button class="remove-btn" onclick="removerArquivo(${index})">✕</button>
+            `;
+            fileList.appendChild(item);
         });
 
-        function adicionarArquivos(novosArquivos) {
-            const xmls = novosArquivos.filter(f => f.name.toLowerCase().endsWith('.xml'));
-            
-            if (xmls.length === 0) {
-                alert('⚠️ Por favor, selecione apenas arquivos XML');
-                return;
-            }
+        validarFormulario();
+    }
 
-            if (novosArquivos.length > xmls.length) {
-                alert(`⚠️ ${novosArquivos.length - xmls.length} arquivo(s) ignorado(s) (não são XML)`);
-            }
+    function validarFormulario() {
+        const cnpj = cnpjInput.value.trim();
+        const temArquivos = arquivosSelecionados.length > 0;
+        const cnpjValido = cnpj.length === 14;
 
-            xmls.forEach(arquivo => {
-                if (!arquivosSelecionados.find(a => a.name === arquivo.name)) {
-                    arquivosSelecionados.push(arquivo);
-                }
-            });
+        uploadBtn.disabled = !(temArquivos && cnpjValido);
+    }
 
-            atualizarListaArquivos();
+    function removerArquivo(index) {
+        arquivosSelecionados.splice(index, 1);
+        atualizarListaArquivos();
+    }
+
+    function limparArquivos() {
+        arquivosSelecionados = [];
+        atualizarListaArquivos();
+        results.classList.remove('show');
+        progressBar.classList.remove('show');
+    }
+
+    async function processarArquivos() {
+        const cnpj = cnpjInput.value.trim();
+
+        if (!cnpj || cnpj.length !== 14) {
+            alert('⚠️ Por favor, informe um CNPJ válido (14 dígitos)');
+            return;
         }
 
-        function atualizarListaArquivos() {
-            fileList.innerHTML = '';
-            
-            if (arquivosSelecionados.length === 0) {
-                fileListContainer.style.display = 'none';
-                validarFormulario();
-                return;
+        if (arquivosSelecionados.length === 0) {
+            alert('⚠️ Selecione pelo menos um arquivo XML');
+            return;
+        }
+
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="loading">⏳</span> Processando...';
+        progressBar.classList.add('show');
+        results.classList.remove('show');
+
+        try {
+            // ETAPA 1: Processar NFes via Gateway
+            atualizarProgresso(10);
+            const nfeIds = await processarNFes();
+
+            if (!nfeIds || nfeIds.length === 0) {
+                throw new Error('Nenhuma NFe foi processada com sucesso');
             }
 
-            fileListContainer.style.display = 'block';
-            fileCount.textContent = arquivosSelecionados.length;
+            // ETAPA 2: Gerar Borderô com as NFes processadas via Gateway
+            atualizarProgresso(70);
+            const bordero = await gerarBordero(cnpj, nfeIds);
 
-            arquivosSelecionados.forEach((arquivo, index) => {
-                const item = document.createElement('div');
-                item.className = 'file-item';
-                item.innerHTML = `
-                    <div class="file-info">
-                        <div class="file-icon">📄</div>
-                        <div class="file-details">
-                            <h4>${arquivo.name}</h4>
-                            <p>${formatarTamanho(arquivo.size)}</p>
-                        </div>
-                    </div>
-                    <span class="file-status status-pending">Aguardando</span>
-                    <button class="remove-btn" onclick="removerArquivo(${index})">✕</button>
-                `;
-                fileList.appendChild(item);
-            });
+            atualizarProgresso(100);
+            exibirResultadoSucesso(bordero, nfeIds.length);
 
-            validarFormulario();
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('❌ Erro ao processar: ' + error.message);
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = '⬆️ Processar NFes e Gerar Borderô';
+            setTimeout(() => {
+                progressBar.classList.remove('show');
+            }, 1000);
+        }
+    }
+
+    async function processarNFes() {
+        const formData = new FormData();
+        arquivosSelecionados.forEach(arquivo => {
+            formData.append('arquivos', arquivo);
+        });
+        formData.append('cnpjCliente', cnpjInput.value.trim());
+
+        // Via Gateway: /api/nfe/upload-lote
+        const response = await fetch(`${NFE_API_URL}/upload-lote`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Erro ao processar NFes: ' + errorText);
         }
 
-        function validarFormulario() {
-            const cnpj = cnpjInput.value.trim();
-            const temArquivos = arquivosSelecionados.length > 0;
-            const cnpjValido = cnpj.length === 14;
+        const resultado = await response.json();
+        console.log('Resultado processamento NFes:', resultado);
 
-            uploadBtn.disabled = !(temArquivos && cnpjValido);
+        // Extrair IDs das NFes processadas com sucesso
+        const nfeIds = resultado.resultados
+            .filter(r => r.sucesso && r.id)
+            .map(r => r.id);
+
+        if (nfeIds.length === 0) {
+            throw new Error('Nenhuma NFe foi processada corretamente');
         }
 
-        function removerArquivo(index) {
-            arquivosSelecionados.splice(index, 1);
-            atualizarListaArquivos();
+        console.log('NFe IDs extraídos:', nfeIds);
+        return nfeIds;
+    }
+
+    async function gerarBordero(cnpj, nfeIds) {
+        // CORRIGIDO: Endpoint correto é /gerar (não /gerar-multiplas)
+        const response = await fetch(`${BORDERO_API_URL}/gerar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                cnpjCliente: cnpj,
+                nfeIds: nfeIds
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Erro ao gerar borderô:', errorText);
+            throw new Error('Erro ao gerar borderô: ' + errorText);
         }
 
-        function limparArquivos() {
-            arquivosSelecionados = [];
-            atualizarListaArquivos();
-            results.classList.remove('show');
-            progressBar.classList.remove('show');
-        }
+        const bordero = await response.json();
+        console.log('Borderô gerado:', bordero);
+        return bordero;
+    }
 
-        async function processarArquivos() {
-            const cnpj = cnpjInput.value.trim();
-            
-            if (!cnpj || cnpj.length !== 14) {
-                alert('⚠️ Por favor, informe um CNPJ válido (14 dígitos)');
-                return;
-            }
+    function atualizarProgresso(valor) {
+        progressFill.style.width = valor + '%';
+        progressFill.textContent = valor + '%';
+    }
 
-            if (arquivosSelecionados.length === 0) {
-                alert('⚠️ Selecione pelo menos um arquivo XML');
-                return;
-            }
+    function exibirResultadoSucesso(bordero, totalNFes) {
+        results.classList.add('show');
 
-            uploadBtn.disabled = true;
-            uploadBtn.innerHTML = '<span class="loading">⏳</span> Processando...';
-            progressBar.classList.add('show');
-            results.classList.remove('show');
+        document.getElementById('summary').innerHTML = `
+            <div class="summary-card">
+                <div class="summary-value success-color">✅</div>
+                <div class="summary-label">Borderô Gerado</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value total-color">${totalNFes}</div>
+                <div class="summary-label">NFes Processadas</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value total-color">${bordero.quantidadeTitulos || 0}</div>
+                <div class="summary-label">Títulos Gerados</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value total-color">${bordero.quantidadeSacados || 0}</div>
+                <div class="summary-label">Sacados Únicos</div>
+            </div>
+        `;
 
-            try {
-                // ETAPA 1: Processar NFes (porta 8081)
-                atualizarProgresso(10);
-                const nfeIds = await processarNFes();
-                
-                if (!nfeIds || nfeIds.length === 0) {
-                    throw new Error('Nenhuma NFe foi processada com sucesso');
-                }
+        const valorBruto = bordero.valorBruto || 0;
+        const valorDesagio = bordero.valorDesagio || 0;
+        const valorLiquido = bordero.valorLiquido || 0;
 
-                // ETAPA 2: Gerar Borderô com as NFes processadas (porta 8082)
-                atualizarProgresso(70);
-                const bordero = await gerarBordero(cnpj, nfeIds);
-                
-                atualizarProgresso(100);
-                exibirResultadoSucesso(bordero, nfeIds.length);
-
-            } catch (error) {
-                console.error('Erro:', error);
-                alert('❌ Erro ao processar: ' + error.message);
-            } finally {
-                uploadBtn.disabled = false;
-                uploadBtn.innerHTML = '⬆️ Processar NFes e Gerar Borderô';
-                setTimeout(() => {
-                    progressBar.classList.remove('show');
-                }, 1000);
-            }
-        }
-
-        async function processarNFes() {
-            const formData = new FormData();
-            arquivosSelecionados.forEach(arquivo => {
-                formData.append('arquivos', arquivo);
-            });
-            formData.append('cnpjCliente', cnpjInput.value.trim());
-
-            const response = await fetch(`${NFE_API_URL}/nfe/upload-lote`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error('Erro ao processar NFes: ' + response.statusText);
-            }
-
-            const resultado = await response.json();
-            
-            // Extrair IDs das NFes processadas com sucesso
-            const nfeIds = resultado.resultados
-                .filter(r => r.sucesso && r.id)
-                .map(r => r.id);
-
-            if (nfeIds.length === 0) {
-                throw new Error('Nenhuma NFe foi processada corretamente');
-            }
-
-            return nfeIds;
-        }
-
-        async function gerarBordero(cnpj, nfeIds) {
-            const response = await fetch(`${BORDERO_API_URL}/bordero/gerar-multiplas`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    cnpjCliente: cnpj,
-                    nfeIds: nfeIds
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Erro ao gerar borderô: ' + response.statusText);
-            }
-
-            return await response.json();
-        }
-
-        function atualizarProgresso(valor) {
-            progressFill.style.width = valor + '%';
-            progressFill.textContent = valor + '%';
-        }
-
-        function exibirResultadoSucesso(bordero, totalNFes) {
-            results.classList.add('show');
-
-            document.getElementById('summary').innerHTML = `
-                <div class="summary-card">
-                    <div class="summary-value success-color">✅</div>
-                    <div class="summary-label">Borderô Gerado</div>
+        const resultsList = document.getElementById('resultsList');
+        resultsList.innerHTML = `
+            <h3 style="margin-bottom: 15px;">📋 Detalhes do Borderô</h3>
+            <div class="result-item success">
+                <div class="result-header">
+                    <span class="result-title">Borderô ${bordero.numeroBordero}</span>
+                    <span class="file-status status-success">✅ GERADO</span>
                 </div>
-                <div class="summary-card">
-                    <div class="summary-value total-color">${totalNFes}</div>
-                    <div class="summary-label">NFes Processadas</div>
+                <div class="result-details">
+                    <strong>📊 Quantidade de Títulos:</strong> ${bordero.quantidadeTitulos || 0}<br>
+                    <strong>👥 Sacados Únicos:</strong> ${bordero.quantidadeSacados || 0}<br>
+                    <strong>💰 Valor Bruto Total:</strong> R$ ${valorBruto.toFixed(2)}<br>
+                    <strong>📉 Deságio Total:</strong> R$ ${valorDesagio.toFixed(2)}<br>
+                    <strong>💵 Valor Líquido:</strong> R$ ${valorLiquido.toFixed(2)}<br>
+                    <strong>📄 Status:</strong> ${bordero.status}<br>
+                    <br>
+                    <a href="${BORDERO_API_URL}/${bordero.id}/pdf" target="_blank"
+                       style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px;">
+                        📥 Baixar PDF do Borderô
+                    </a>
                 </div>
-                <div class="summary-card">
-                    <div class="summary-value total-color">${bordero.quantidadeTitulos}</div>
-                    <div class="summary-label">Títulos Gerados</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-value total-color">${bordero.quantidadeSacados}</div>
-                    <div class="summary-label">Sacados Únicos</div>
-                </div>
-            `;
+            </div>
+        `;
 
-            const resultsList = document.getElementById('resultsList');
-            resultsList.innerHTML = `
-                <h3 style="margin-bottom: 15px;">📋 Detalhes do Borderô</h3>
-                <div class="result-item success">
-                    <div class="result-header">
-                        <span class="result-title">Borderô ${bordero.numeroBordero}</span>
-                        <span class="file-status status-success">✅ GERADO</span>
-                    </div>
-                    <div class="result-details">
-                        <strong>📊 Quantidade de Títulos:</strong> ${bordero.quantidadeTitulos}<br>
-                        <strong>👥 Sacados Únicos:</strong> ${bordero.quantidadeSacados}<br>
-                        <strong>💰 Valor Bruto Total:</strong> R$ ${bordero.valorBruto.toFixed(2)}<br>
-                        <strong>📉 Deságio Total:</strong> R$ ${bordero.valorDesagio.toFixed(2)}<br>
-                        <strong>💵 Valor Líquido:</strong> R$ ${bordero.valorLiquido.toFixed(2)}<br>
-                        <strong>📄 Status:</strong> ${bordero.status}<br>
-                        <br>
-                        <a href="${BORDERO_API_URL}/bordero/${bordero.id}/pdfall" target="_blank" 
-                           style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px;">
-                            📥 Baixar PDF do Borderô
-                        </a>
-                    </div>
-                </div>
-            `;
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
-            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
-        function formatarTamanho(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / 1048576).toFixed(1) + ' MB';
-        }
-    </script>
+    function formatarTamanho(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+</script>
 </body>
 </html>

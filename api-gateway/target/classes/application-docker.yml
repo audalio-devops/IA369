@@ -1,0 +1,55 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  security:
+    enabled: false
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: nfe-processor
+          uri: lb://nfe-processor-service
+          predicates:
+            - Path=/api/nfe/**
+          filters:
+            - StripPrefix=1
+        - id: bordero-generator
+          uri: lb://bordero-generator-service
+          predicates:
+            - Path=/api/bordero/**
+          filters:
+            - StripPrefix=1
+        - id: client-service
+          uri: lb://client-service
+          predicates:
+            - Path=/api/clients/**
+          filters:
+            - StripPrefix=1
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: false
+    hostname: api-gateway
+    instance-id: ${spring.application.name}:${server.port}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always

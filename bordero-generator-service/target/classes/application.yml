@@ -1,0 +1,94 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: bordero-generator-service
+
+  security:
+    enabled: false
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bordero_db
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # IMPORTANTE: Configurar ordem de execução do SQL
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
+      # Executar data.sql DEPOIS do Hibernate criar as tabelas
+      # Se usar ddl-auto: update, o Hibernate cria as tabelas primeiro
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: bordero-generator
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 10
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+      client-service:
+        connectTimeout: 3000
+        readTimeout: 3000
+      nfe-processor-service:
+        connectTimeout: 3000
+        readTimeout: 3000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
+logging:
+  level:
+    com.bordero.bordero: DEBUG
+    org.springframework: INFO
+    org.hibernate.SQL: DEBUG

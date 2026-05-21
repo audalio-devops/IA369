@@ -1,0 +1,32 @@
+## 8️⃣ Executar Testes via powershell
+# Todos os testes
+mvn test
+
+# Apenas testes unitários
+mvn test -Dtest=*Test
+
+# Apenas testes de integração
+mvn test -Dtest=*IntegrationTest
+
+# Com cobertura
+mvn test jacoco:report
+
+# Teste específico
+mvn test -Dtest=DiaUtilServiceTest
+
+# Teste específico com método
+mvn test -Dtest=DiaUtilServiceTest#d2EmSextaDeveIrParaTerca
+
+---
+
+## ✅ Cobertura de Testes
+
+Os testes cobrem:
+- ✅ Cálculo de dias úteis
+- ✅ Identificação de fins de semana
+- ✅ Verificação de feriados
+- ✅ Cálculo de float (D+) com obstáculos
+- ✅ Cálculo de tarifas por tipo
+- ✅ Geração completa de borderô
+- ✅ Validação de deságio
+- ✅ Integração completa do fluxo
